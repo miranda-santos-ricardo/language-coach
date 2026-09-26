@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = (
         "postgresql+psycopg://"
-        "admin:admin123@192.168.2.38:5434/language_coach"
+        "language_coach:language_coach@localhost:5432/language_coach"
     )
 
 
