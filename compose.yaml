@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17.11
+    environment:
+      POSTGRES_DB: language_coach
+      POSTGRES_USER: language_coach
+      POSTGRES_PASSWORD: language_coach
+    ports:
+      - "5432:5432"
+    volumes:
+      - language_coach_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U language_coach -d language_coach"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  language_coach_postgres_data:
