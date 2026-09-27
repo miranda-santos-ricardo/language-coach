@@ -10,28 +10,30 @@ The project is being developed incrementally. French and English are the initial
 
 Implemented so far:
 
-- FastAPI backend foundation
+- FastAPI backend foundation and `/health`
 - centralized configuration
 - SQLAlchemy 2.x + Psycopg 3
 - PostgreSQL local environment through Docker Compose
-- Alembic migration infrastructure
-- `GET /health`
-- domain models for User, Language, LanguageVariant, CommunicationRegister and LanguageProfile
-- CEFR representation (`A1`–`C2`)
-- production/comprehension register modeling
-- schema migration
-- reproducible reference-data migration
-- backend structural tests
-- Pydantic API schemas for users, languages, communication registers and language profiles
-- repositories for users, languages, registers and language profiles
-- application services with business-rule validation and explicit write transactions
+- Alembic migrations and reproducible reference data
+- User, Language, LanguageVariant, CommunicationRegister and LanguageProfile domain models
+- CEFR (`A1`–`C2`), production/comprehension register modeling and ownership rules
+- Pydantic API schemas
+- repository/service layers with explicit transaction ownership
 - REST API for users, languages, communication registers and language profiles
-- HTTP error mapping for domain/service failures
+- React + TypeScript + Vite frontend
+- user selection/creation
+- language profile visualization
+- language profile creation/editing
+- frontend backend-health indicator
+- local-development CORS configuration
 
 Not implemented yet:
 
-- frontend
-- Session Context and later AI/voice capabilities
+- Session Context
+- voice/STT/TTS
+- AI orchestration and learning engine
+- authentication
+- progress/mistake/vocabulary tracking
 
 ## Repository structure
 
@@ -39,25 +41,36 @@ Not implemented yet:
 .
 ├── compose.yaml
 ├── README.md
-└── backend/
-    ├── alembic/
-    │   ├── env.py
-    │   └── versions/
-    │       ├── 0001_phase2_domain_schema.py
-    │       └── 0002_phase2_reference_data.py
-    ├── app/
+├── backend/
+│   ├── alembic/
+│   │   └── versions/
+│   │       ├── 0001_phase2_domain_schema.py
+│   │       └── 0002_phase2_reference_data.py
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── db/
+│   │   ├── models/
+│   │   ├── repositories/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   └── main.py
+│   ├── tests/
+│   ├── .env.example
+│   ├── alembic.ini
+│   └── pyproject.toml
+└── frontend/
+    ├── src/
     │   ├── api/
-    │   ├── core/
-    │   ├── db/
-    │   ├── models/
-    │   ├── repositories/
-    │   ├── schemas/
-    │   ├── services/
-    │   └── main.py
-    ├── tests/
+    │   ├── components/
+    │   ├── test/
+    │   ├── App.tsx
+    │   └── main.tsx
     ├── .env.example
-    ├── alembic.ini
-    └── pyproject.toml
+    ├── index.html
+    ├── package.json
+    ├── tsconfig.json
+    └── vite.config.ts
 ```
 
 ## Domain model
@@ -101,7 +114,7 @@ English
 └── en-GB — English — United Kingdom
 ```
 
-For `fr-CA`, `regional_focus` is currently `Québec`.
+For `fr-CA`, `regional_focus` is `Québec`.
 
 ## Communication registers
 
@@ -115,95 +128,7 @@ Reference data currently includes:
 
 All five are currently available for both production and comprehension. `colloquial` being available for production does not make it the learner's default; the Language Profile stores the default production register, while a future Session will choose the register practiced at that moment.
 
-## CEFR
-
-Supported levels:
-
-```text
-A1
-A2
-B1
-B2
-C1
-C2
-```
-
-The application represents CEFR with a Python `StrEnum`. PostgreSQL stores it as text protected by a CHECK constraint rather than a native PostgreSQL enum.
-
-## Database integrity
-
-The schema currently protects important invariants including:
-
-- unique language codes
-- unique variant codes
-- variant → language foreign key
-- valid CEFR values
-- one Language Profile per user + variant
-- valid User/Profile/Variant/Register foreign keys
-- unique comprehension-register associations through a composite primary key
-- reference-data relationships protected with restrictive delete behavior
-
-## API schema contracts
-
-Pydantic schemas now define the API boundary without exposing internal integer IDs for reference data. External contracts use stable codes such as:
-
-```text
-fr
-fr-CA
-professional
-```
-
-Language Profile creation is modeled with:
-
-```json
-{
-  "language_code": "fr",
-  "variant_code": "fr-CA",
-  "cefr_level": "B2",
-  "default_production_register_code": "professional",
-  "comprehension_register_codes": [
-    "professional",
-    "everyday",
-    "colloquial"
-  ]
-}
-```
-
-Pydantic validates payload structure, CEFR values, code shape, duplicate comprehension registers and PATCH semantics. Rules that depend on reference data — for example whether `fr-CA` belongs to `fr`, whether a register exists/is active, or whether it supports production — are intentionally deferred to the service layer.
-
-A PATCH may update CEFR/register preferences independently. Changing a variant requires `language_code` and `variant_code` to be supplied together. An empty PATCH or explicit `null` for a patch field is rejected. An empty comprehension-register list is allowed and means "clear the current comprehension selections."
-
-
-## Repository and service layer
-
-Repositories are responsible only for persistence queries and ORM loading. They never commit transactions. Services orchestrate business rules and own write transactions.
-
-The current service layer enforces rules including:
-
-- user existence before profile operations
-- profile ownership scoped by both `user_id` and `profile_id`
-- language and variant lookup by stable codes
-- language/variant compatibility (`fr-CA` must belong to `fr`)
-- active reference-data validation
-- register capability validation for production/comprehension
-- one Language Profile per user + language variant
-- safe profile updates, including duplicate checks when changing variants
-- clearing/replacing comprehension registers
-
-Expected application errors remain represented as service exceptions. The REST layer now maps them to HTTP semantics without coupling services to FastAPI.
-
-Write transaction ownership is explicit:
-
-```text
-repository → query/add only
-service    → business rules + commit/rollback
-API        → request/response + HTTP error mapping
-```
-
-
 ## REST API
-
-Current endpoints:
 
 ```text
 GET    /health
@@ -223,22 +148,149 @@ GET    /users/{user_id}/language-profiles/{profile_id}
 PATCH  /users/{user_id}/language-profiles/{profile_id}
 ```
 
-Relevant HTTP semantics include:
+Reference data is exposed by stable codes (`fr`, `fr-CA`, `professional`) instead of internal integer IDs.
 
-- `201 Created` for user/profile creation
-- `404 Not Found` for missing users, owned profiles, and language variant collections requested for an unknown language
-- `409 Conflict` when attempting to create a duplicate profile for the same user + variant
-- `422 Unprocessable Content` for semantic request errors such as language/variant mismatch, unknown body reference codes, unsupported register modes, or invalid Pydantic payloads
+## Frontend
 
-Profile ownership is enforced through the nested user route and the underlying repository query uses both `user_id` and `profile_id`.
+The Phase 2 frontend is intentionally small and functional. It supports:
 
-`GET /communication-registers` is intentionally exposed so the frontend can discover register options and capability flags from reference data instead of hardcoding them.
+```text
+Who's practicing?
+├── select an existing user
+└── create a user
 
-## Reference data strategy
+Selected user
+└── Languages
+    ├── view Language Profiles
+    ├── add Language Profile
+    └── edit Language Profile
+```
 
-Reference data is versioned through Alembic rather than inserted during application startup.
+The Language Profile form reads languages, variants and communication registers from the backend instead of hardcoding them.
 
-Migration chain:
+The form supports:
+
+- language
+- regional variant
+- CEFR
+- default production/speaking register
+- multiple comprehension registers
+
+For example, a single `fr-CA` profile may have Professional as its default production register while including Professional, Everyday, Conversational and Colloquial in comprehension.
+
+The frontend does not implement Session behavior. Choosing the register being practiced *today* belongs to the future Session Context phase.
+
+## Technology stack
+
+Backend:
+
+- FastAPI
+- SQLAlchemy 2.x
+- PostgreSQL
+- Psycopg 3
+- Alembic
+- Pydantic
+- Pytest
+
+Frontend:
+
+- React 19
+- TypeScript
+- Vite 8
+- native `fetch` API
+- Vitest + React Testing Library
+
+No frontend state-management or UI-component framework has been added because Phase 2 does not require one yet.
+
+## Local setup
+
+### 1. PostgreSQL
+
+From the repository root:
+
+```powershell
+docker compose up -d postgres
+```
+
+### 2. Backend
+
+```powershell
+cd backend
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+Copy-Item .env.example .env
+alembic upgrade head
+python -m uvicorn app.main:app --reload
+```
+
+Backend:
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### 3. Frontend
+
+Use a Node.js version compatible with Vite 8 (Node 20.19+ or 22.12+).
+
+In another terminal:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
+
+Frontend:
+
+```text
+http://localhost:5173
+```
+
+Default frontend API configuration:
+
+```text
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+The backend permits the local Vite development origins configured in `CORS_ORIGINS`.
+
+## Tests
+
+Backend:
+
+```powershell
+cd backend
+pytest -q
+alembic check
+```
+
+Current expected backend result at this milestone:
+
+```text
+62 passed
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm test
+npm run build
+```
+
+Current frontend suite contains 5 tests covering the important Phase 2 user flows: backend status, user selection/creation, data-driven language-profile form, profile creation request and profile editing.
+
+## Migration chain
 
 ```text
 <base>
@@ -248,112 +300,23 @@ Migration chain:
 0002_phase2_reference_data (head)
 ```
 
-`0001_phase2_schema` creates the Phase 2 database structure.
+There is no frontend-related database migration. `alembic check` should continue to report no new upgrade operations.
 
-`0002_phase2_reference_data` inserts the initial languages, language variants and communication registers.
+## Out of scope
 
-## Local setup
-
-Start PostgreSQL from the repository root:
-
-```powershell
-docker compose up -d postgres
-```
-
-Then configure the backend:
-
-```powershell
-cd backend
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-Copy-Item .env.example .env
-```
-
-Apply migrations:
-
-```powershell
-alembic upgrade head
-```
-
-Run the API:
-
-```powershell
-python -m uvicorn app.main:app --reload
-```
-
-Health check:
-
-```text
-GET http://127.0.0.1:8000/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok"
-}
-```
-
-Swagger UI:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-## Tests
-
-Run from `backend/`:
-
-```powershell
-pytest -q
-```
-
-Current expected result at this milestone:
-
-```text
-60 passed
-```
-
-Useful Alembic validation commands:
-
-```powershell
-alembic heads
-alembic current
-alembic check
-alembic history --verbose
-```
-
-The current Alembic head is:
-
-```text
-0002_phase2_reference_data
-```
-
-## Out of scope for the current milestone
-
-The following are intentionally not implemented yet:
+The following remain intentionally outside Phase 2:
 
 - Session / Session Context
-- authentication / OAuth
-- microphone / MediaRecorder
+- microphone and audio upload
 - Speech-to-Text / Text-to-Speech
 - OpenAI or other LLM integration
-- Learning Engine / AI Orchestrator
-- conversations / interactions
-- mistakes / vocabulary / progress engine
-- scenarios / dashboard
-- RAG / vector databases / agents
-- cloud deployment / realtime voice
+- conversations/interactions
+- mistakes and vocabulary
+- scenarios and progress engine
+- authentication/OAuth
+- cloud deployment
+- RAG/vector databases/agents
 
-## Development principle
+## Next milestone
 
-The repository is the source of truth. Development proceeds incrementally:
-
-```text
-design → implement → test → validate → continue
-```
-
-The next implementation step is the REST API layer, which will expose the validated service operations through FastAPI endpoints and map service exceptions to HTTP status codes.
+After Step 10 is validated locally, the remaining Phase 2 work is end-to-end validation and final handoff/documentation before beginning **Phase 3 — Session Context**.
