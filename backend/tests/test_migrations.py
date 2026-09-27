@@ -3,7 +3,9 @@ from pathlib import Path
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-EXPECTED_HEAD = "0001_phase2_schema"
+SCHEMA_REVISION = "0001_phase2_schema"
+REFERENCE_DATA_REVISION = "0002_phase2_reference_data"
+EXPECTED_HEAD = REFERENCE_DATA_REVISION
 
 
 def _script_directory() -> ScriptDirectory:
@@ -20,7 +22,15 @@ def test_alembic_has_single_expected_head() -> None:
 
 def test_initial_migration_has_no_parent_revision() -> None:
     script = _script_directory()
-    revision = script.get_revision(EXPECTED_HEAD)
+    revision = script.get_revision(SCHEMA_REVISION)
 
     assert revision is not None
     assert revision.down_revision is None
+
+
+def test_reference_data_migration_follows_schema_migration() -> None:
+    script = _script_directory()
+    revision = script.get_revision(REFERENCE_DATA_REVISION)
+
+    assert revision is not None
+    assert revision.down_revision == SCHEMA_REVISION
