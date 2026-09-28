@@ -8,3 +8,15 @@ class CEFRLevel(StrEnum):
     B2 = "B2"
     C1 = "C1"
     C2 = "C2"
+
+class TrainingMode(StrEnum):
+    CONVERSATION = "conversation"
+    PROFESSIONAL = "professional"
+    SCENARIO = "scenario"
+    FREE_TALK = "free_talk"
+
+
+class SessionStatus(StrEnum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    ABANDONED = "abandoned"

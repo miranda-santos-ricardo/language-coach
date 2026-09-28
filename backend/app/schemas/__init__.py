@@ -10,6 +10,11 @@ from app.schemas.language_profile import (
 )
 from app.schemas.user import UserCreate, UserRead
 
+from app.schemas.practice_session import (
+    PracticeSessionCreate,
+    PracticeSessionRead
+)
+
 __all__ = [
     "CommunicationRegisterRead",
     "LanguageProfileCreate",
@@ -19,4 +24,6 @@ __all__ = [
     "LanguageVariantRead",
     "UserCreate",
     "UserRead",
+    "PracticeSessionCreate",
+    "PracticeSessionRead"
 ]

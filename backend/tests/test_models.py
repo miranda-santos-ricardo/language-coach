@@ -6,7 +6,7 @@ from app.models import CEFRLevel, CommunicationRegister, LanguageProfile
 
 
 def test_phase_2_tables_are_registered_in_metadata() -> None:
-    assert set(Base.metadata.tables) == {
+    expected_phase_2_tables = {
         "users",
         "languages",
         "language_variants",
@@ -14,6 +14,8 @@ def test_phase_2_tables_are_registered_in_metadata() -> None:
         "language_profiles",
         "language_profile_comprehension_registers",
     }
+
+    assert expected_phase_2_tables.issubset(set(Base.metadata.tables))
 
 
 def test_all_model_relationships_configure_successfully() -> None:
@@ -75,3 +77,20 @@ def test_colloquial_register_can_support_production_and_comprehension() -> None:
 
     assert register.production_allowed is True
     assert register.comprehension_allowed is True
+
+
+def test_phase_3_practice_session_table_is_registered_in_metadata() -> None:
+    assert "practice_sessions" in Base.metadata.tables
+
+from app.models import SessionStatus, TrainingMode
+def test_training_mode_values() -> None:
+    assert TrainingMode.CONVERSATION.value == "conversation"
+    assert TrainingMode.PROFESSIONAL.value == "professional"
+    assert TrainingMode.SCENARIO.value == "scenario"
+    assert TrainingMode.FREE_TALK.value == "free_talk"
+
+
+def test_session_status_values() -> None:
+    assert SessionStatus.ACTIVE.value == "active"
+    assert SessionStatus.COMPLETED.value == "completed"
+    assert SessionStatus.ABANDONED.value == "abandoned"

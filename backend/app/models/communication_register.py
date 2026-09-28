@@ -9,6 +9,7 @@ from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.language_profile import LanguageProfile
+    from app.models.practice_session import PracticeSession
 
 
 class CommunicationRegister(TimestampMixin, Base):
@@ -54,4 +55,8 @@ class CommunicationRegister(TimestampMixin, Base):
     comprehension_for_profiles: Mapped[list["LanguageProfile"]] = relationship(
         secondary=language_profile_comprehension_registers,
         back_populates="comprehension_registers",
+    )
+    practice_sessions: Mapped[list["PracticeSession"]] = relationship(
+        back_populates="communication_register",
+        passive_deletes=True,
     )

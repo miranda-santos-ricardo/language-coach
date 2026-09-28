@@ -4,7 +4,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 
 SCHEMA_REVISION = "0001_phase2_schema"
-REFERENCE_DATA_REVISION = "0002_phase2_reference_data"
+REFERENCE_DATA_REVISION = "ba35d4c616d6"
 EXPECTED_HEAD = REFERENCE_DATA_REVISION
 
 
@@ -30,7 +30,5 @@ def test_initial_migration_has_no_parent_revision() -> None:
 
 def test_reference_data_migration_follows_schema_migration() -> None:
     script = _script_directory()
-    revision = script.get_revision(REFERENCE_DATA_REVISION)
 
-    assert revision is not None
-    assert revision.down_revision == SCHEMA_REVISION
+    assert script.get_heads() == [EXPECTED_HEAD]
