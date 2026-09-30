@@ -36,3 +36,6 @@ class DuplicateLanguageProfileError(ServiceError):
 
 class LanguageProfileNotFoundError(ServiceError):
     pass
+
+class PracticeSessionNotFoundError(ServiceError):
+    pass

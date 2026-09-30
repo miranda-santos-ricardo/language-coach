@@ -1,49 +1,46 @@
-
 import uuid
 
-import sqlalchemy import select
-import sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.models.practice_session import PracticeSession
+from app.models import PracticeSession
+
 
 class PracticeSessionRepository:
-    def __init__(self, db:Session) -> None:
-        self.db = db
+    @staticmethod
+    def add(
+        session: Session,
+        practice_session: PracticeSession,
+    ) -> None:
+        session.add(practice_session)
 
-    def add(self, pratice_session: PracticeSession) -> PracticeSession:
-        self.db.add(pratice_session)
-        self.db.flush()
-        self.db.refresh(pratice_session)
-        return PracticeSession
-
-    def get_by_id(self, session_id: uuid.UUID) -> PracticeSession | None:
+    @staticmethod
+    def get_owned(
+        session: Session,
+        profile_id: uuid.UUID,
+        practice_session_id: uuid.UUID,
+    ) -> PracticeSession | None:
         statement = select(PracticeSession).where(
-            PracticeSession.id == session_id
+            PracticeSession.id == practice_session_id,
+            PracticeSession.language_profile_id == profile_id,
         )
 
-        return self.db.scalar(statement)
+        return session.scalar(statement)
 
-    def get_by_id_and_profile(self, session_id: uuid.UUID, language_profile: uuid.UUID) -> PracticeSession | None:
-        statement = select(PracticeSession).where(
-            PracticeSession.id == session_id, 
-            PracticeSession.language_profile_id ==language_profile
-        )
-
-        return self.db.scalar(statement)
-
-    def list_by_profile(
-            self,
-            language_profile_id: uuid.UUID
-    ) -> list [PracticeSession]:
+    @staticmethod
+    def list_for_profile(
+        session: Session,
+        profile_id: uuid.UUID,
+    ) -> list[PracticeSession]:
         statement = (
             select(PracticeSession)
             .where(
-                PracticeSession.language_profile_id == language_profile_id
+                PracticeSession.language_profile_id == profile_id
             )
             .order_by(
                 PracticeSession.started_at.desc(),
-                PracticeSession.id.desc()
+                PracticeSession.id.desc(),
             )
         )
 
-        return list(self.db.scalars(statement).all())
+        return list(session.scalars(statement))

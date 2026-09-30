@@ -69,15 +69,3 @@ class LanguageProfileRepository:
             )
 
         return session.scalar(statement.limit(1)) is not None
-
-    def get_by_id_and_user(
-    self,
-    profile_id: uuid.UUID,
-    user_id: uuid.UUID,
-    ) -> LanguageProfile | None:
-        statement = select(LanguageProfile).where(
-            LanguageProfile.id == profile_id,
-            LanguageProfile.user_id == user_id,
-        )
-
-        return self.db.scalar(statement)

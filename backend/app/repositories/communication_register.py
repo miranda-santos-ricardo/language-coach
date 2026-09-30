@@ -45,4 +45,4 @@ class CommunicationRegisterRepository:
             CommunicationRegister.code == code
         )
 
-        return self.db.scalar(statement)
+        return self.scalar(statement)
