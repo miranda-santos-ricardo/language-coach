@@ -1,7 +1,10 @@
+import os
+from dotenv import load_dotenv
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+load_dotenv()
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -16,11 +19,14 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = (
         "postgresql+psycopg://"
-        "language_coach:language_coach@localhost:5432/language_coach"
+        "admin:admin123@192.168.2.38:5434/language_coach"
     )
+
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://192.168.2.25:5173",
+        "*"
     ]
 
 

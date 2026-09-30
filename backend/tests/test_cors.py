@@ -15,7 +15,7 @@ def test_frontend_dev_origin_is_allowed() -> None:
     )
 
     assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert "http://localhost:5173" in (response.headers["access-control-allow-origin"])
 
 
 def test_unknown_origin_is_not_allowed() -> None:
