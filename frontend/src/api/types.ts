@@ -48,3 +48,45 @@ export interface LanguageProfilePayload {
   default_production_register_code: string;
   comprehension_register_codes: string[];
 }
+
+export type TrainingMode =
+  | "conversation"
+  | "professional"
+  | "scenario"
+  | "free_talk";
+
+export type PracticeSessionStatus =
+  | "active"
+  | "completed"
+  | "abandoned";
+
+export interface PracticeSession {
+  id: string;
+  language_profile_id: string;
+  training_mode: TrainingMode;
+  register: string;
+
+  profile_cefr: CEFRLevel;
+  target_cefr: CEFRLevel | null;
+  effective_cefr: CEFRLevel;
+
+  language: string;
+  variant: string;
+
+  scenario_key: string | null;
+
+  status: PracticeSessionStatus;
+
+  started_at: string;
+  ended_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PracticeSessionPayload {
+  training_mode: TrainingMode;
+  register: string;
+  target_cefr?: CEFRLevel | null;
+  scenario_key?: string | null;
+}

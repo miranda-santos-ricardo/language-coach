@@ -10,12 +10,14 @@ from app.services.errors import (
     RegisterModeNotAllowedError,
     ServiceError,
     UserNotFoundError,
-    PracticeSessionNotFoundError
+    PracticeSessionNotFoundError,
+    InvalidPracticeSessionTransitionError
 )
 from app.services.language import LanguageService
 from app.services.language_profile import LanguageProfileService
 from app.services.user import UserService
 from app.services.practice_session import PracticeSessionService
+
 __all__ = [
     "CommunicationRegisterNotFoundError",
     "CommunicationRegisterService",
@@ -33,4 +35,5 @@ __all__ = [
     "UserService",
     "PracticeSessionNotFoundError",
     "PracticeSessionService",
+    "InvalidPracticeSessionTransitionError"
 ]

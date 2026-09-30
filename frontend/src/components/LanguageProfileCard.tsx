@@ -3,6 +3,7 @@ import type { LanguageProfile } from "../api/types";
 interface LanguageProfileCardProps {
   profile: LanguageProfile;
   onEdit: (profile: LanguageProfile) => void;
+  onStartPractice: (profile: LanguageProfile) => void;
 }
 
 function countryFlag(countryCode: string | null): string {
@@ -12,7 +13,7 @@ function countryFlag(countryCode: string | null): string {
   );
 }
 
-export function LanguageProfileCard({ profile, onEdit }: LanguageProfileCardProps) {
+export function LanguageProfileCard({ profile, onEdit, onStartPractice }: LanguageProfileCardProps) {
   return (
     <article className="profile-card">
       <div className="profile-card__topline">
@@ -29,6 +30,13 @@ export function LanguageProfileCard({ profile, onEdit }: LanguageProfileCardProp
           onClick={() => onEdit(profile)}
         >
           Edit
+        </button>
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={() => onStartPractice(profile)}
+        >
+          Start practice
         </button>
       </div>
 

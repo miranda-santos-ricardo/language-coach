@@ -23,7 +23,8 @@ from app.services.errors import (
     LanguageProfileNotFoundError,
     PracticeSessionNotFoundError,
     RegisterModeNotAllowedError,
-    UserNotFoundError
+    UserNotFoundError,
+    InvalidPracticeSessionTransitionError
 )
 
 
@@ -210,3 +211,61 @@ class PracticeSessionService:
         session: Session,
     ) -> None:
         session.commit()
+
+    def complete(
+            self,
+            session:Session,
+            user_id: uuid.UUID,
+            profile_id:uuid.UUID,
+            practice_session_id:uuid.UUID
+    ) -> PracticeSession:
+
+        practice_session = self.get(
+            session, 
+            user_id,
+            profile_id,
+            practice_session_id
+        )
+
+        self._require_active(practice_session)
+
+        practice_session.status = SessionStatus.COMPLETED
+        practice_session.ended_at = datetime.now(timezone.utc)
+
+        self._commit_session_write(session)
+
+        return practice_session
+
+
+    def abandon(
+        self,
+        session: Session,
+        user_id: uuid.UUID,
+        profile_id: uuid.UUID,
+        practice_session_id: uuid.UUID,
+    ) -> PracticeSession:
+        practice_session = self.get(
+            session,
+            user_id,
+            profile_id,
+            practice_session_id,
+        )
+
+        self._require_active(practice_session)
+
+        practice_session.status = SessionStatus.ABANDONED
+        practice_session.ended_at = datetime.now(timezone.utc)
+
+        self._commit_session_write(session)
+
+        return practice_session
+
+    @staticmethod
+    def _require_active(
+        practice_session: PracticeSession,
+    ) -> None:
+        if practice_session.status != SessionStatus.ACTIVE:
+            raise InvalidPracticeSessionTransitionError(
+                "Only an active practice session can transition "
+                "to a terminal status"
+            )

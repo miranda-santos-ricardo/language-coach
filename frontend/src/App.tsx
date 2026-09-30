@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { api } from "./api/client";
-import type { LanguageProfile, User } from "./api/types";
+import type { LanguageProfile, User, PracticeSession} from "./api/types";
 import { BackendStatus } from "./components/BackendStatus";
 import { LanguageProfileCard } from "./components/LanguageProfileCard";
 import { LanguageProfileForm } from "./components/LanguageProfileForm";
 import { UserSelector } from "./components/UserSelector";
+
+import { PracticeSessionForm } from "./components/PracticeSessionForm";
+import { PracticeSessionStarted } from "./components/PracticeSessionStarted";
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">(
@@ -19,6 +22,9 @@ export default function App() {
   const [editingProfile, setEditingProfile] = useState<LanguageProfile | null>(null);
   const [creatingProfile, setCreatingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [practicingProfile, setPracticingProfile] =useState<LanguageProfile | null>(null);
+  const [activeSession, setActiveSession] = useState<PracticeSession | null>(null);
 
   useEffect(() => {
     void api
@@ -48,6 +54,8 @@ export default function App() {
     setCreatingProfile(false);
     setProfilesLoading(true);
     setError(null);
+    setPracticingProfile(null);
+    setActiveSession(null);
     try {
       setProfiles(await api.listProfiles(user.id));
     } catch (reason) {
@@ -81,6 +89,19 @@ export default function App() {
     setCreatingProfile(false);
   }
 
+  function startPractice(profile: LanguageProfile) {
+    setEditingProfile(null);
+    setCreatingProfile(false);
+    setActiveSession(null);
+    setPracticingProfile(profile);
+  }
+
+  function handleSessionStarted(
+    session: PracticeSession,
+  ) {
+    setActiveSession(session);
+  }
+
   const showProfileForm = selectedUser && (creatingProfile || editingProfile);
 
   return (
@@ -90,7 +111,7 @@ export default function App() {
           <p className="eyebrow">AI Language & Professional Communication Coach</p>
           <h1>Build the language you want to use.</h1>
           <p className="app-header__subtitle">
-            Configure your language baseline now; sessions and coaching come later.
+            Build your language baseline and choose what you want to practice today.
           </p>
         </div>
         <BackendStatus status={backendStatus} />
@@ -114,6 +135,22 @@ export default function App() {
               <h2>Select a user</h2>
               <p>Choose who is practicing to view and configure their language profiles.</p>
             </div>
+          ) : practicingProfile && activeSession ? (
+            <PracticeSessionStarted
+              profile={practicingProfile}
+              session={activeSession}
+              onBack={() => {
+                setPracticingProfile(null);
+                setActiveSession(null);
+              }}
+            />
+          ) : practicingProfile ? (
+            <PracticeSessionForm
+              userId={selectedUser.id}
+              profile={practicingProfile}
+              onStarted={handleSessionStarted}
+              onCancel={() => setPracticingProfile(null)}
+            />
           ) : showProfileForm ? (
             <LanguageProfileForm
               userId={selectedUser.id}
@@ -153,6 +190,7 @@ export default function App() {
                     <LanguageProfileCard
                       profile={profile}
                       onEdit={(profile) => setEditingProfile(profile)}
+                      onStartPractice={startPractice}
                       key={profile.id}
                     />
                   ))}

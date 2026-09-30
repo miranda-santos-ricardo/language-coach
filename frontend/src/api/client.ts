@@ -5,6 +5,8 @@ import type {
   LanguageProfilePayload,
   LanguageVariant,
   User,
+  PracticeSession,
+  PracticeSessionPayload,
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -108,4 +110,33 @@ export const api = {
         body: JSON.stringify(payload),
       },
     ),
+  createPracticeSession: (
+  userId: string,
+  profileId: string,
+  payload: PracticeSessionPayload,
+) =>
+  request<PracticeSession>(
+    `/users/${userId}/language-profiles/${profileId}/sessions`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  ),
+
+listPracticeSessions: (
+  userId: string,
+  profileId: string,
+) =>
+  request<PracticeSession[]>(
+    `/users/${userId}/language-profiles/${profileId}/sessions`,
+  ),
+
+getPracticeSession: (
+  userId: string,
+  profileId: string,
+  sessionId: string,
+) =>
+  request<PracticeSession>(
+    `/users/${userId}/language-profiles/${profileId}/sessions/${sessionId}`,
+  ),
 };

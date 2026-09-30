@@ -707,3 +707,283 @@ def test_historical_session_keeps_original_cefr_snapshot(
     assert body["profile_cefr"] == "B2"
     assert body["target_cefr"] is None
     assert body["effective_cefr"] == "B2"
+
+# ---------------------------------------------------------------------------
+# Lifecycle
+# ---------------------------------------------------------------------------
+
+
+def test_complete_active_practice_session(
+    api_client: TestClient,
+) -> None:
+    user = _create_user(api_client)
+    profile = _create_profile(
+        api_client,
+        user["id"],
+    )
+
+    create_response = api_client.post(
+        _session_collection_url(
+            user["id"],
+            profile["id"],
+        ),
+        json={
+            "training_mode": "professional",
+            "register": "professional",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    created = create_response.json()
+
+    assert created["status"] == "active"
+    assert created["ended_at"] is None
+
+    response = api_client.post(
+        (
+            f"{_session_detail_url(
+                user['id'],
+                profile['id'],
+                created['id'],
+            )}/complete"
+        )
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["id"] == created["id"]
+    assert body["status"] == "completed"
+    assert body["ended_at"] is not None
+
+    get_response = api_client.get(
+        _session_detail_url(
+            user["id"],
+            profile["id"],
+            created["id"],
+        )
+    )
+
+    assert get_response.status_code == 200
+
+    persisted = get_response.json()
+
+    assert persisted["status"] == "completed"
+    assert persisted["ended_at"] is not None
+
+def test_abandon_active_practice_session(
+    api_client: TestClient,
+) -> None:
+    user = _create_user(api_client)
+    profile = _create_profile(
+        api_client,
+        user["id"],
+    )
+
+    create_response = api_client.post(
+        _session_collection_url(
+            user["id"],
+            profile["id"],
+        ),
+        json={
+            "training_mode": "conversation",
+            "register": "everyday",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    created = create_response.json()
+
+    response = api_client.post(
+        (
+            f"{_session_detail_url(
+                user['id'],
+                profile['id'],
+                created['id'],
+            )}/abandon"
+        )
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "abandoned"
+    assert body["ended_at"] is not None
+
+
+def test_completed_session_cannot_be_abandoned(
+    api_client: TestClient,
+) -> None:
+    user = _create_user(api_client)
+    profile = _create_profile(
+        api_client,
+        user["id"],
+    )
+
+    create_response = api_client.post(
+        _session_collection_url(
+            user["id"],
+            profile["id"],
+        ),
+        json={
+            "training_mode": "professional",
+            "register": "professional",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    practice_session_id = create_response.json()["id"]
+
+    detail_url = _session_detail_url(
+        user["id"],
+        profile["id"],
+        practice_session_id,
+    )
+
+    complete_response = api_client.post(
+        f"{detail_url}/complete"
+    )
+
+    assert complete_response.status_code == 200
+    assert complete_response.json()["status"] == "completed"
+
+    abandon_response = api_client.post(
+        f"{detail_url}/abandon"
+    )
+
+    assert abandon_response.status_code == 409
+
+
+def test_abandoned_session_cannot_be_completed(
+    api_client: TestClient,
+) -> None:
+    user = _create_user(api_client)
+    profile = _create_profile(
+        api_client,
+        user["id"],
+    )
+
+    create_response = api_client.post(
+        _session_collection_url(
+            user["id"],
+            profile["id"],
+        ),
+        json={
+            "training_mode": "conversation",
+            "register": "everyday",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    practice_session_id = create_response.json()["id"]
+
+    detail_url = _session_detail_url(
+        user["id"],
+        profile["id"],
+        practice_session_id,
+    )
+
+    abandon_response = api_client.post(
+        f"{detail_url}/abandon"
+    )
+
+    assert abandon_response.status_code == 200
+    assert abandon_response.json()["status"] == "abandoned"
+
+    complete_response = api_client.post(
+        f"{detail_url}/complete"
+    )
+
+    assert complete_response.status_code == 409
+
+
+def test_completed_session_cannot_be_completed_again(
+    api_client: TestClient,
+) -> None:
+    user = _create_user(api_client)
+    profile = _create_profile(
+        api_client,
+        user["id"],
+    )
+
+    create_response = api_client.post(
+        _session_collection_url(
+            user["id"],
+            profile["id"],
+        ),
+        json={
+            "training_mode": "professional",
+            "register": "professional",
+        },
+    )
+
+    practice_session_id = create_response.json()["id"]
+
+    detail_url = _session_detail_url(
+        user["id"],
+        profile["id"],
+        practice_session_id,
+    )
+
+    first_response = api_client.post(
+        f"{detail_url}/complete"
+    )
+
+    assert first_response.status_code == 200
+
+    second_response = api_client.post(
+        f"{detail_url}/complete"
+    )
+
+    assert second_response.status_code == 409
+
+
+def test_other_user_cannot_complete_practice_session(
+    api_client: TestClient,
+) -> None:
+    owner = _create_user(
+        api_client,
+        "Owner",
+    )
+
+    other = _create_user(
+        api_client,
+        "Other",
+    )
+
+    profile = _create_profile(
+        api_client,
+        owner["id"],
+    )
+
+    create_response = api_client.post(
+        _session_collection_url(
+            owner["id"],
+            profile["id"],
+        ),
+        json={
+            "training_mode": "professional",
+            "register": "professional",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    practice_session_id = create_response.json()["id"]
+
+    response = api_client.post(
+        (
+            f"/users/{other['id']}"
+            f"/language-profiles/{profile['id']}"
+            f"/sessions/{practice_session_id}/complete"
+        )
+    )
+
+    assert response.status_code == 404
+

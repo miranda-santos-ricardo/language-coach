@@ -1,8 +1,21 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import App from "./App";
+
 
 const ricardo = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -14,7 +27,11 @@ const ricardo = {
 const frenchProfile = {
   id: "22222222-2222-4222-8222-222222222222",
   user_id: ricardo.id,
-  language: { code: "fr", name: "French", is_active: true },
+  language: {
+    code: "fr",
+    name: "French",
+    is_active: true,
+  },
   variant: {
     code: "fr-CA",
     display_name: "French — Canada / Québec",
@@ -50,9 +67,42 @@ const frenchProfile = {
   updated_at: "2026-09-26T12:00:00Z",
 };
 
+const activePracticeSession = {
+  id: "44444444-4444-4444-8444-444444444444",
+  language_profile_id: frenchProfile.id,
+
+  training_mode: "professional",
+  register: "professional",
+
+  profile_cefr: "B2",
+  target_cefr: null,
+  effective_cefr: "B2",
+
+  language: "fr",
+  variant: "fr-CA",
+
+  scenario_key: null,
+
+  status: "active",
+
+  started_at: "2026-09-29T12:00:00Z",
+  ended_at: null,
+
+  created_at: "2026-09-29T12:00:00Z",
+  updated_at: "2026-09-29T12:00:00Z",
+};
+
 const languages = [
-  { code: "en", name: "English", is_active: true },
-  { code: "fr", name: "French", is_active: true },
+  {
+    code: "en",
+    name: "English",
+    is_active: true,
+  },
+  {
+    code: "fr",
+    name: "French",
+    is_active: true,
+  },
 ];
 
 const registers = [
@@ -72,63 +122,167 @@ const registers = [
   },
 ];
 
-function jsonResponse(body: unknown, status = 200) {
+
+function jsonResponse(
+  body: unknown,
+  status = 200,
+) {
   return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
+    new Response(
+      JSON.stringify(body),
+      {
+        status,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    ),
   );
 }
 
+
 function installFetchMock() {
-  return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    const method = init?.method ?? "GET";
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(
+      (
+        input: RequestInfo | URL,
+        init?: RequestInit,
+      ) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
 
-    if (url.endsWith("/health")) return jsonResponse({ status: "ok" });
-    if (url.endsWith("/users") && method === "GET") return jsonResponse([ricardo]);
-    if (url.endsWith("/users") && method === "POST") {
-      return jsonResponse(
-        { ...ricardo, id: "33333333-3333-4333-8333-333333333333", display_name: "Ana" },
-        201,
-      );
-    }
-    if (url.endsWith(`/users/${ricardo.id}/language-profiles`) && method === "GET") {
-      return jsonResponse([frenchProfile]);
-    }
-    if (url.includes("33333333-3333-4333-8333-333333333333/language-profiles")) {
-      return jsonResponse([]);
-    }
-    if (url.endsWith("/languages")) return jsonResponse(languages);
-    if (url.endsWith("/languages/fr/variants")) {
-      return jsonResponse([frenchProfile.variant]);
-    }
-    if (url.endsWith("/languages/en/variants")) {
-      return jsonResponse([
-        {
-          code: "en-CA",
-          display_name: "English — Canada",
-          country_code: "CA",
-          regional_focus: null,
-          is_active: true,
-        },
-      ]);
-    }
-    if (url.endsWith("/communication-registers")) return jsonResponse(registers);
-    if (
-      url.endsWith(`/users/${ricardo.id}/language-profiles`) &&
-      method === "POST"
-    ) {
-      return jsonResponse(frenchProfile, 201);
-    }
-    if (url.endsWith(`/language-profiles/${frenchProfile.id}`) && method === "PATCH") {
-      return jsonResponse({ ...frenchProfile, cefr_level: "C1" });
-    }
+        if (url.endsWith("/health")) {
+          return jsonResponse({
+            status: "ok",
+          });
+        }
 
-    return jsonResponse({ detail: `Unhandled request: ${method} ${url}` }, 500);
-  });
+        if (
+          url.endsWith("/users") &&
+          method === "GET"
+        ) {
+          return jsonResponse([ricardo]);
+        }
+
+        if (
+          url.endsWith("/users") &&
+          method === "POST"
+        ) {
+          return jsonResponse(
+            {
+              ...ricardo,
+              id: "33333333-3333-4333-8333-333333333333",
+              display_name: "Ana",
+            },
+            201,
+          );
+        }
+
+        if (
+          url.endsWith(
+            `/users/${ricardo.id}/language-profiles`,
+          ) &&
+          method === "GET"
+        ) {
+          return jsonResponse([
+            frenchProfile,
+          ]);
+        }
+
+        if (
+          url.includes(
+            "33333333-3333-4333-8333-333333333333/language-profiles",
+          )
+        ) {
+          return jsonResponse([]);
+        }
+
+        if (url.endsWith("/languages")) {
+          return jsonResponse(languages);
+        }
+
+        if (
+          url.endsWith(
+            "/languages/fr/variants",
+          )
+        ) {
+          return jsonResponse([
+            frenchProfile.variant,
+          ]);
+        }
+
+        if (
+          url.endsWith(
+            "/languages/en/variants",
+          )
+        ) {
+          return jsonResponse([
+            {
+              code: "en-CA",
+              display_name: "English — Canada",
+              country_code: "CA",
+              regional_focus: null,
+              is_active: true,
+            },
+          ]);
+        }
+
+        if (
+          url.endsWith(
+            "/communication-registers",
+          )
+        ) {
+          return jsonResponse(registers);
+        }
+
+        if (
+          url.endsWith(
+            `/users/${ricardo.id}/language-profiles`,
+          ) &&
+          method === "POST"
+        ) {
+          return jsonResponse(
+            frenchProfile,
+            201,
+          );
+        }
+
+        if (
+          url.endsWith(
+            `/language-profiles/${frenchProfile.id}`,
+          ) &&
+          method === "PATCH"
+        ) {
+          return jsonResponse({
+            ...frenchProfile,
+            cefr_level: "C1",
+          });
+        }
+
+        if (
+          url.endsWith(
+            `/users/${ricardo.id}/language-profiles/${frenchProfile.id}/sessions`,
+          ) &&
+          method === "POST"
+        ) {
+          return jsonResponse(
+            activePracticeSession,
+            201,
+          );
+        }
+
+        return jsonResponse(
+          {
+            detail:
+              `Unhandled request: ${method} ${url}`,
+          },
+          500,
+        );
+      },
+    );
 }
+
 
 describe("App", () => {
   beforeEach(() => {
@@ -139,84 +293,422 @@ describe("App", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads the backend status and allows selecting a user to see profiles", async () => {
-    const user = userEvent.setup();
-    render(<App />);
 
-    expect(await screen.findByText("Backend online")).toBeInTheDocument();
-    const ricardoButton = await screen.findByRole("button", { name: /Ricardo/i });
-    await user.click(ricardoButton);
+  it(
+    "starts a practice session from a language profile",
+    async () => {
+      const user = userEvent.setup();
 
-    expect(await screen.findByText("French — Canada / Québec")).toBeInTheDocument();
-    expect(screen.getByText("CEFR B2")).toBeInTheDocument();
-    expect(screen.getAllByText("Colloquial").length).toBeGreaterThan(0);
-  });
+      render(<App />);
 
-  it("creates a user and selects it", async () => {
-    const user = userEvent.setup();
-    render(<App />);
+      await user.click(
+        await screen.findByRole(
+          "button",
+          {
+            name: /Ricardo/i,
+          },
+        ),
+      );
 
-    await screen.findByRole("button", { name: /Ricardo/i });
-    await user.type(screen.getByLabelText("Add user"), "Ana");
-    await user.click(screen.getByRole("button", { name: "+ Add user" }));
+      await screen.findByText(
+        "French — Canada / Québec",
+      );
 
-    const ana = await screen.findByRole("button", { name: /Ana/i });
-    expect(ana).toHaveAttribute("aria-pressed", "true");
-    expect(await screen.findByText("No language profiles yet")).toBeInTheDocument();
-  });
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "Start practice",
+          },
+        ),
+      );
 
-  it("opens the language profile form with data-driven register options", async () => {
-    const user = userEvent.setup();
-    render(<App />);
+      expect(
+        await screen.findByRole(
+          "heading",
+          {
+            name: "French — Canada / Québec",
+          },
+        ),
+      ).toBeInTheDocument();
 
-    await user.click(await screen.findByRole("button", { name: /Ricardo/i }));
-    await screen.findByText("French — Canada / Québec");
-    await user.click(screen.getByRole("button", { name: "+ Add language" }));
+      /*
+       * There are multiple controls whose accessible
+       * name is "Professional".
+       *
+       * Scope the query to the "Mode" fieldset so we
+       * select the Professional training mode instead
+       * of the Professional communication register.
+       */
+      const modeGroup = screen.getByRole(
+        "group",
+        {
+          name: "Mode",
+        },
+      );
 
-    expect(await screen.findByRole("heading", { name: "Add language profile" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Language")).toBeInTheDocument();
-    expect(screen.getByLabelText("Default speaking style")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Colloquial" })).toBeInTheDocument();
-  });
+      await user.click(
+        within(modeGroup).getByRole(
+          "radio",
+          {
+            name: "Professional",
+          },
+        ),
+      );
 
-  it("submits a new language profile using reference-data codes", async () => {
-    const user = userEvent.setup();
-    render(<App />);
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "Start practice",
+          },
+        ),
+      );
 
-    await user.click(await screen.findByRole("button", { name: /Ricardo/i }));
-    await screen.findByText("French — Canada / Québec");
-    await user.click(screen.getByRole("button", { name: "+ Add language" }));
+      await waitFor(() =>
+        expect(
+          globalThis.fetch,
+        ).toHaveBeenCalledWith(
+          expect.stringContaining(
+            `/users/${ricardo.id}/language-profiles/${frenchProfile.id}/sessions`,
+          ),
+          expect.objectContaining({
+            method: "POST",
+          }),
+        ),
+      );
 
-    await screen.findByRole("heading", { name: "Add language profile" });
-    await user.selectOptions(screen.getByLabelText("Language"), "fr");
-    await waitFor(() =>
-      expect(screen.getByLabelText("Variant")).toHaveValue("fr-CA"),
-    );
-    await user.selectOptions(screen.getByLabelText("CEFR"), "B2");
-    await user.selectOptions(screen.getByLabelText("Default speaking style"), "professional");
-    await user.click(screen.getByRole("checkbox", { name: "Colloquial" }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+      expect(
+        await screen.findByText(
+          "Session started",
+        ),
+      ).toBeInTheDocument();
 
-    await waitFor(() =>
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining(`/users/${ricardo.id}/language-profiles`),
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
-  });
+      expect(
+        screen.getByText("CEFR B2"),
+      ).toBeInTheDocument();
+    },
+  );
 
-  it("edits an existing profile", async () => {
-    const user = userEvent.setup();
-    render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Ricardo/i }));
-    await screen.findByText("French — Canada / Québec");
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+  it(
+    "loads the backend status and allows selecting a user to see profiles",
+    async () => {
+      const user = userEvent.setup();
 
-    const cefr = await screen.findByLabelText("CEFR");
-    await user.selectOptions(cefr, "C1");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+      render(<App />);
 
-    await waitFor(() => expect(screen.getByText("CEFR C1")).toBeInTheDocument());
-  });
+      expect(
+        await screen.findByText(
+          "Backend online",
+        ),
+      ).toBeInTheDocument();
+
+      const ricardoButton =
+        await screen.findByRole(
+          "button",
+          {
+            name: /Ricardo/i,
+          },
+        );
+
+      await user.click(
+        ricardoButton,
+      );
+
+      expect(
+        await screen.findByText(
+          "French — Canada / Québec",
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByText(
+          "CEFR B2",
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getAllByText(
+          "Colloquial",
+        ).length,
+      ).toBeGreaterThan(0);
+    },
+  );
+
+
+  it(
+    "creates a user and selects it",
+    async () => {
+      const user = userEvent.setup();
+
+      render(<App />);
+
+      await screen.findByRole(
+        "button",
+        {
+          name: /Ricardo/i,
+        },
+      );
+
+      await user.type(
+        screen.getByLabelText(
+          "Add user",
+        ),
+        "Ana",
+      );
+
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "+ Add user",
+          },
+        ),
+      );
+
+      const ana =
+        await screen.findByRole(
+          "button",
+          {
+            name: /Ana/i,
+          },
+        );
+
+      expect(
+        ana,
+      ).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+
+      expect(
+        await screen.findByText(
+          "No language profiles yet",
+        ),
+      ).toBeInTheDocument();
+    },
+  );
+
+
+  it(
+    "opens the language profile form with data-driven register options",
+    async () => {
+      const user = userEvent.setup();
+
+      render(<App />);
+
+      await user.click(
+        await screen.findByRole(
+          "button",
+          {
+            name: /Ricardo/i,
+          },
+        ),
+      );
+
+      await screen.findByText(
+        "French — Canada / Québec",
+      );
+
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "+ Add language",
+          },
+        ),
+      );
+
+      expect(
+        await screen.findByRole(
+          "heading",
+          {
+            name: "Add language profile",
+          },
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByLabelText(
+          "Language",
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByLabelText(
+          "Default speaking style",
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByRole(
+          "checkbox",
+          {
+            name: "Colloquial",
+          },
+        ),
+      ).toBeInTheDocument();
+    },
+  );
+
+
+  it(
+    "submits a new language profile using reference-data codes",
+    async () => {
+      const user = userEvent.setup();
+
+      render(<App />);
+
+      await user.click(
+        await screen.findByRole(
+          "button",
+          {
+            name: /Ricardo/i,
+          },
+        ),
+      );
+
+      await screen.findByText(
+        "French — Canada / Québec",
+      );
+
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "+ Add language",
+          },
+        ),
+      );
+
+      await screen.findByRole(
+        "heading",
+        {
+          name: "Add language profile",
+        },
+      );
+
+      await user.selectOptions(
+        screen.getByLabelText(
+          "Language",
+        ),
+        "fr",
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText(
+            "Variant",
+          ),
+        ).toHaveValue(
+          "fr-CA",
+        ),
+      );
+
+      await user.selectOptions(
+        screen.getByLabelText(
+          "CEFR",
+        ),
+        "B2",
+      );
+
+      await user.selectOptions(
+        screen.getByLabelText(
+          "Default speaking style",
+        ),
+        "professional",
+      );
+
+      await user.click(
+        screen.getByRole(
+          "checkbox",
+          {
+            name: "Colloquial",
+          },
+        ),
+      );
+
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "Save",
+          },
+        ),
+      );
+
+      await waitFor(() =>
+        expect(
+          globalThis.fetch,
+        ).toHaveBeenCalledWith(
+          expect.stringContaining(
+            `/users/${ricardo.id}/language-profiles`,
+          ),
+          expect.objectContaining({
+            method: "POST",
+          }),
+        ),
+      );
+    },
+  );
+
+
+  it(
+    "edits an existing profile",
+    async () => {
+      const user = userEvent.setup();
+
+      render(<App />);
+
+      await user.click(
+        await screen.findByRole(
+          "button",
+          {
+            name: /Ricardo/i,
+          },
+        ),
+      );
+
+      await screen.findByText(
+        "French — Canada / Québec",
+      );
+
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "Edit",
+          },
+        ),
+      );
+
+      const cefr =
+        await screen.findByLabelText(
+          "CEFR",
+        );
+
+      await user.selectOptions(
+        cefr,
+        "C1",
+      );
+
+      await user.click(
+        screen.getByRole(
+          "button",
+          {
+            name: "Save",
+          },
+        ),
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "CEFR C1",
+          ),
+        ).toBeInTheDocument(),
+      );
+    },
+  );
 });

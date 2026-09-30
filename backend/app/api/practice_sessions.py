@@ -6,7 +6,8 @@ from app.services.errors import (
     LanguageProfileNotFoundError,
     PracticeSessionNotFoundError, 
     RegisterModeNotAllowedError, 
-    UserNotFoundError
+    UserNotFoundError,
+    InvalidPracticeSessionTransitionError
 )
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -136,5 +137,77 @@ def get_practice_session(
     ) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+@router.post(
+    "/{practice_session_id}/complete",
+    response_model=PracticeSessionRead,
+)
+def complete_practice_session(
+    user_id: uuid.UUID,
+    profile_id: uuid.UUID,
+    practice_session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> PracticeSessionRead:
+    try:
+        practice_session = service.complete(
+            db,
+            user_id,
+            profile_id,
+            practice_session_id,
+        )
+
+        return to_practice_session_read(practice_session)
+
+    except (
+        UserNotFoundError,
+        LanguageProfileNotFoundError,
+        PracticeSessionNotFoundError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except InvalidPracticeSessionTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+@router.post(
+    "/{practice_session_id}/abandon",
+    response_model=PracticeSessionRead,
+)
+def abandon_practice_session(
+    user_id: uuid.UUID,
+    profile_id: uuid.UUID,
+    practice_session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> PracticeSessionRead:
+    try:
+        practice_session = service.abandon(
+            db,
+            user_id,
+            profile_id,
+            practice_session_id,
+        )
+
+        return to_practice_session_read(practice_session)
+
+    except (
+        UserNotFoundError,
+        LanguageProfileNotFoundError,
+        PracticeSessionNotFoundError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except InvalidPracticeSessionTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc

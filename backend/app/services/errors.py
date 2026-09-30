@@ -39,3 +39,6 @@ class LanguageProfileNotFoundError(ServiceError):
 
 class PracticeSessionNotFoundError(ServiceError):
     pass
+
+class InvalidPracticeSessionTransitionError(ServiceError):
+    pass
