@@ -36,3 +36,13 @@ class CommunicationRegisterRepository:
             .order_by(CommunicationRegister.code)
         )
         return list(session.scalars(statement))
+
+    def get_by_code(
+        self,
+        code: str,
+    ) -> CommunicationRegister | None:
+        statement = select(CommunicationRegister).where(
+            CommunicationRegister.code == code
+        )
+
+        return self.db.scalar(statement)
