@@ -29,6 +29,10 @@ class Settings(BaseSettings):
         "*"
     ]
 
+    openai_api_key: str | None = None
+    openai_stt_model: str = "gpt-transcribe"
+    openai_stt_timeout_seconds: float = 30.0
+
 
 @lru_cache
 def get_settings() -> Settings:
