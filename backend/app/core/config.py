@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_stt_model: str = "gpt-transcribe"
     openai_stt_timeout_seconds: float = 30.0
+    
+    max_audio_upload_bytes: int = 10 * 1024 * 1024
 
 
 @lru_cache

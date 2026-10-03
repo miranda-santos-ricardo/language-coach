@@ -17,6 +17,12 @@ from app.services.language import LanguageService
 from app.services.language_profile import LanguageProfileService
 from app.services.user import UserService
 from app.services.practice_session import PracticeSessionService
+from app.services.audio_upload_errors import (
+    AudioUploadError,
+    EmptyAudioFileError,
+    UnsupportedAudioTypeError,
+    AudioFileTooLargeError,
+)
 
 __all__ = [
     "CommunicationRegisterNotFoundError",
@@ -35,5 +41,9 @@ __all__ = [
     "UserService",
     "PracticeSessionNotFoundError",
     "PracticeSessionService",
-    "InvalidPracticeSessionTransitionError"
+    "InvalidPracticeSessionTransitionError",
+    "AudioUploadError",
+    "EmptyAudioFileError",
+    "UnsupportedAudioTypeError",
+    "AudioFileTooLargeError"
 ]
