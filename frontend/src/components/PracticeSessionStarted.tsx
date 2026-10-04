@@ -9,6 +9,8 @@ interface PracticeSessionStartedProps {
   onBack: () => void;
 }
 
+import { VoiceRecorder } from "./VoiceRecorder";
+
 function trainingModeLabel(
   mode: PracticeSession["training_mode"],
 ): string {
@@ -65,6 +67,8 @@ export function PracticeSessionStarted({
       >
         Back to languages
       </button>
+
+      <VoiceRecorder />
     </section>
   );
 }

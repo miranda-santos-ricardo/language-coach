@@ -136,3 +136,35 @@ def test_validate_audio_upload_uses_default_filename_when_missing() -> None:
 
 def test_default_audio_upload_limit_is_10_mb() -> None:
     assert DEFAULT_MAX_AUDIO_SIZE_BYTES == 10 * 1024 * 1024
+
+
+#Normalized audio test
+from app.services.audio_upload import (
+    normalize_audio_content_type,
+    validate_audio_upload,
+)
+
+def test_accepts_webm_with_opus_codec_parameter():
+    result = validate_audio_upload(
+        content=b"audio-data",
+        filename="recording.webm",
+        content_type="audio/webm;codecs=opus",
+    )
+
+    assert result.content == b"audio-data"
+    assert result.filename == "recording.webm"
+    assert result.content_type == "audio/webm"
+
+def test_normalizes_audio_content_type():
+    assert (
+        normalize_audio_content_type("audio/webm;codecs=opus")
+        == "audio/webm"
+    )
+
+def test_normalizes_audio_content_type_case_and_whitespace():
+    assert (
+        normalize_audio_content_type(
+            " Audio/WebM ; codecs=opus "
+        )
+        == "audio/webm"
+    )

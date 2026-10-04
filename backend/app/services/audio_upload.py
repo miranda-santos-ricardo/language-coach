@@ -25,6 +25,11 @@ class ValidatedAudio:
     filename: str
     content_type: str
 
+def normalize_audio_content_type(content_type: str | None) -> str | None:
+    if not content_type:
+        return None
+
+    return content_type.split(";", 1)[0].strip().lower()
 
 def validate_audio_upload(
     *,
@@ -38,7 +43,9 @@ def validate_audio_upload(
             "Uploaded audio file is empty."
         )
 
-    if content_type not in SUPPORTED_AUDIO_TYPES:
+    normalized_content_type = normalize_audio_content_type(content_type)
+
+    if normalized_content_type not in SUPPORTED_AUDIO_TYPES:
         raise UnsupportedAudioTypeError(
             f"Unsupported audio content type: {content_type}"
         )
@@ -53,5 +60,5 @@ def validate_audio_upload(
     return ValidatedAudio(
         content=content,
         filename=safe_filename,
-        content_type=content_type,
+        content_type=normalized_content_type,
     )
