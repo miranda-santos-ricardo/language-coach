@@ -1,322 +1,809 @@
 # AI Language & Professional Communication Coach
 
-AI-powered language learning and professional communication coaching platform.
+A local-first AI-powered language learning and professional communication platform focused initially on **Canadian French (fr-CA)** and **English (en-CA)**.
 
-The project is being developed incrementally. French and English are the initial languages, with regional variants modeled independently so that additional languages and variants can be added without redesigning the domain.
+The project is designed not only for general language practice, but also for **professional and corporate communication**, including formal communication, executive language, vocabulary, tone, persuasion, and communication scenarios relevant to environments such as banking, insurance, consulting, technology, and other professional settings.
 
-## Current status
+The application is being developed incrementally, with each phase introducing a new architectural capability while preserving compatibility with the previous phases.
 
-**Phase 2 — User + Language Profile**
+---
 
-Implemented so far:
+## Project Status
 
-- FastAPI backend foundation and `/health`
-- centralized configuration
-- SQLAlchemy 2.x + Psycopg 3
-- PostgreSQL local environment through Docker Compose
-- Alembic migrations and reproducible reference data
-- User, Language, LanguageVariant, CommunicationRegister and LanguageProfile domain models
-- CEFR (`A1`–`C2`), production/comprehension register modeling and ownership rules
-- Pydantic API schemas
-- repository/service layers with explicit transaction ownership
-- REST API for users, languages, communication registers and language profiles
-- React + TypeScript + Vite frontend
-- user selection/creation
-- language profile visualization
-- language profile creation/editing
-- frontend backend-health indicator
-- local-development CORS configuration
+The project has completed the foundational user, language-profile, and practice-session capabilities.
 
-Not implemented yet:
+Phase 4 is currently introducing the application's first real **voice interaction cycle**.
 
-- Session Context
-- voice/STT/TTS
-- AI orchestration and learning engine
-- authentication
-- progress/mistake/vocabulary tracking
+### Current progress
 
-## Repository structure
+| Phase | Capability | Status |
+|---|---|---|
+| Phase 1 | Application Foundation | ✅ Completed |
+| Phase 2 | User + Language Profile | ✅ Completed |
+| Phase 3 | Practice Session Lifecycle | ✅ Completed |
+| Phase 4 | Voice Input + Speech-to-Text | 🚧 In Progress |
+| Phase 5+ | Conversational AI / Coaching | 📋 Planned |
+
+Current backend regression:
 
 ```text
-.
-├── compose.yaml
-├── README.md
-├── backend/
-│   ├── alembic/
-│   │   └── versions/
-│   │       ├── 0001_phase2_domain_schema.py
-│   │       └── 0002_phase2_reference_data.py
-│   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── db/
-│   │   ├── models/
-│   │   ├── repositories/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   └── main.py
-│   ├── tests/
-│   ├── .env.example
-│   ├── alembic.ini
-│   └── pyproject.toml
-└── frontend/
-    ├── src/
-    │   ├── api/
-    │   ├── components/
-    │   ├── test/
-    │   ├── App.tsx
-    │   └── main.tsx
-    ├── .env.example
-    ├── index.html
-    ├── package.json
-    ├── tsconfig.json
-    └── vite.config.ts
+133 tests passed
+0 warnings
 ```
 
-## Domain model
+No real OpenAI API calls are performed by the automated test suite.
+
+---
+
+# Current Architecture
+
+The application currently follows a layered architecture:
 
 ```text
-User
- │
- │ 1:N
- ▼
-LanguageProfile
- │
- ├──────────────► LanguageVariant ──N:1──► Language
- │
- ├──────────────► CommunicationRegister
- │                 default production register
- │
- └────── N:M ──► CommunicationRegister
-                   comprehension registers
+┌─────────────────────────────────────┐
+│          React Frontend             │
+│                                     │
+│  User Selection                     │
+│  Language Profile                   │
+│  Practice Session                   │
+│  Voice Recording (Phase 4)          │
+└──────────────────┬──────────────────┘
+                   │ HTTP / JSON
+                   │ multipart/form-data
+                   ▼
+┌─────────────────────────────────────┐
+│             FastAPI                 │
+│                                     │
+│  REST API                           │
+│  Upload Validation                  │
+│  Error Mapping                      │
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────┐
+│           Service Layer             │
+│                                     │
+│  UserService                        │
+│  LanguageProfileService             │
+│  PracticeSessionService             │
+│  TranscriptionService               │
+└──────────────┬───────────┬──────────┘
+               │           │
+               ▼           ▼
+┌───────────────────┐  ┌────────────────────┐
+│ Repository Layer  │  │ SpeechToText       │
+│                   │  │ abstraction        │
+│ SQLAlchemy        │  └─────────┬──────────┘
+└─────────┬─────────┘            │
+          │                      ▼
+          ▼             ┌────────────────────┐
+┌───────────────────┐   │ OpenAI STT         │
+│ PostgreSQL        │   │ Integration        │
+└───────────────────┘   └────────────────────┘
 ```
 
-A user may have multiple Language Profiles, but only one profile for each language variant:
+The frontend does not know which Speech-to-Text provider is being used.
 
-```text
-UNIQUE(user_id, language_variant_id)
-```
+Provider-specific behavior remains behind the backend `SpeechToText` abstraction.
 
-A Language Profile stores the learner's persistent baseline for a language variant. A future Session will represent what is being practiced at a specific moment. Therefore the same `fr-CA` profile can later be used for Professional practice one day and Colloquial practice another day.
+---
 
-## Regional variants
+# Phase 1 — Application Foundation
 
-Reference data currently includes:
+Phase 1 established the technical foundation of the application.
 
-```text
-French
-├── fr-CA — French — Canada / Québec
-└── fr-FR — French — France
+Core technologies include:
 
-English
-├── en-CA — English — Canada
-├── en-US — English — United States
-└── en-GB — English — United Kingdom
-```
+### Backend
 
-For `fr-CA`, `regional_focus` is `Québec`.
-
-## Communication registers
-
-Reference data currently includes:
-
-- `professional`
-- `formal_executive`
-- `everyday`
-- `conversational`
-- `colloquial`
-
-All five are currently available for both production and comprehension. `colloquial` being available for production does not make it the learner's default; the Language Profile stores the default production register, while a future Session will choose the register practiced at that moment.
-
-## REST API
-
-```text
-GET    /health
-
-POST   /users
-GET    /users
-GET    /users/{user_id}
-
-GET    /languages
-GET    /languages/{language_code}/variants
-
-GET    /communication-registers
-
-POST   /users/{user_id}/language-profiles
-GET    /users/{user_id}/language-profiles
-GET    /users/{user_id}/language-profiles/{profile_id}
-PATCH  /users/{user_id}/language-profiles/{profile_id}
-```
-
-Reference data is exposed by stable codes (`fr`, `fr-CA`, `professional`) instead of internal integer IDs.
-
-## Frontend
-
-The Phase 2 frontend is intentionally small and functional. It supports:
-
-```text
-Who's practicing?
-├── select an existing user
-└── create a user
-
-Selected user
-└── Languages
-    ├── view Language Profiles
-    ├── add Language Profile
-    └── edit Language Profile
-```
-
-The Language Profile form reads languages, variants and communication registers from the backend instead of hardcoding them.
-
-The form supports:
-
-- language
-- regional variant
-- CEFR
-- default production/speaking register
-- multiple comprehension registers
-
-For example, a single `fr-CA` profile may have Professional as its default production register while including Professional, Everyday, Conversational and Colloquial in comprehension.
-
-The frontend does not implement Session behavior. Choosing the register being practiced *today* belongs to the future Session Context phase.
-
-## Technology stack
-
-Backend:
-
+- Python 3.12+
 - FastAPI
-- SQLAlchemy 2.x
-- PostgreSQL
-- Psycopg 3
+- SQLAlchemy
 - Alembic
+- PostgreSQL
 - Pydantic
 - Pytest
 
-Frontend:
+### Frontend
 
-- React 19
+- React
 - TypeScript
-- Vite 8
-- native `fetch` API
-- Vitest + React Testing Library
+- Vite
+- Vitest
+- React Testing Library
 
-No frontend state-management or UI-component framework has been added because Phase 2 does not require one yet.
-
-## Local setup
-
-### 1. PostgreSQL
-
-From the repository root:
-
-```powershell
-docker compose up -d postgres
-```
-
-### 2. Backend
-
-```powershell
-cd backend
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-Copy-Item .env.example .env
-alembic upgrade head
-python -m uvicorn app.main:app --reload
-```
-
-Backend:
+The initial architecture established clear separation between:
 
 ```text
-http://127.0.0.1:8000
+API
+ ↓
+Service
+ ↓
+Repository
+ ↓
+Database
 ```
 
-Swagger:
+---
+
+# Phase 2 — User + Language Profile
+
+Phase 2 introduced persistent users and language-learning profiles.
+
+A user can maintain language profiles containing information such as:
+
+- language
+- language variant
+- CEFR level
+- target CEFR level
+- communication register
+- learning preferences
+
+Initial language support includes:
 
 ```text
-http://127.0.0.1:8000/docs
+French
+ ├── fr-CA
+ └── fr-FR
+
+English
+ ├── en-CA
+ ├── en-US
+ └── en-GB
 ```
 
-### 3. Frontend
+The architecture is designed so additional languages and variants can be introduced without redesigning the application.
 
-Use a Node.js version compatible with Vite 8 (Node 20.19+ or 22.12+).
+---
 
-In another terminal:
+# Phase 3 — Practice Session Lifecycle
 
-```powershell
-cd frontend
-Copy-Item .env.example .env.local
+Phase 3 introduced the concept of a **PracticeSession**.
+
+A session represents a language-learning interaction associated with a specific language profile.
+
+The ownership hierarchy is:
+
+```text
+User
+ └── LanguageProfile
+       └── PracticeSession
+```
+
+The backend validates this hierarchy before accessing a session.
+
+A practice session includes contextual information such as:
+
+- training mode
+- communication register
+- current CEFR level
+- target CEFR level
+- effective CEFR level
+- language
+- language variant
+- scenario
+- lifecycle status
+
+Supported lifecycle states include:
+
+```text
+ACTIVE
+COMPLETED
+ABANDONED
+```
+
+Only active sessions can participate in new interactions.
+
+Phase 3 established the session context required for the conversational capabilities introduced in later phases.
+
+---
+
+# Phase 4 — Voice Input + Speech-to-Text
+
+Phase 4 introduces the first real voice interaction cycle.
+
+The target flow is:
+
+```text
+User
+ ↓
+Browser Microphone
+ ↓
+MediaRecorder
+ ↓
+Audio Blob
+ ↓
+multipart/form-data
+ ↓
+FastAPI
+ ↓
+Audio Validation
+ ↓
+PracticeSession Validation
+ ↓
+TranscriptionService
+ ↓
+SpeechToText
+ ↓
+OpenAI STT
+ ↓
+Transcript
+ ↓
+React UI
+```
+
+Phase 4 deliberately stops at transcription.
+
+The following capabilities are **not part of Phase 4**:
+
+- LLM conversation
+- grammar correction
+- communication coaching
+- AI-generated responses
+- Text-to-Speech
+- pronunciation scoring
+- conversation history
+- realtime WebSocket/WebRTC communication
+
+Those capabilities will be introduced in later phases.
+
+---
+
+## Phase 4 Progress
+
+### Step 1 — Repository Inspection
+
+✅ Completed
+
+The existing architecture and Phase 3 implementation were reviewed before introducing voice functionality.
+
+---
+
+### Step 2 — Voice/STT Architecture
+
+✅ Completed
+
+The Speech-to-Text architecture was defined before implementation.
+
+The key design principle is provider isolation:
+
+```text
+TranscriptionService
+        │
+        ▼
+SpeechToText
+   Protocol
+        │
+        ▼
+OpenAISpeechToText
+```
+
+This allows the STT provider to be replaced later without changing the application service layer.
+
+---
+
+### Step 3 — OpenAI STT Integration
+
+✅ Completed
+
+The backend now contains an isolated OpenAI Speech-to-Text integration.
+
+Configuration is environment-based:
+
+```dotenv
+OPENAI_API_KEY=
+OPENAI_STT_MODEL=gpt-transcribe
+OPENAI_STT_TIMEOUT_SECONDS=30
+```
+
+The API key exists only in the backend.
+
+It must never be exposed to the React application.
+
+Locale normalization is handled by the backend.
+
+Example:
+
+```text
+fr-CA → fr
+fr-FR → fr
+
+en-CA → en
+en-US → en
+en-GB → en
+```
+
+The language is derived from the `PracticeSession` context rather than supplied by the frontend.
+
+---
+
+### Step 4 — Transcription Service
+
+✅ Completed
+
+`TranscriptionService` coordinates the transcription use case.
+
+Responsibilities include:
+
+```text
+User ownership
+      ↓
+LanguageProfile ownership
+      ↓
+PracticeSession ownership
+      ↓
+Session must be ACTIVE
+      ↓
+Resolve language variant
+      ↓
+Normalize STT language
+      ↓
+SpeechToText.transcribe()
+      ↓
+TranscriptionResult
+```
+
+The service does not depend directly on OpenAI.
+
+Instead, it depends on the `SpeechToText` interface.
+
+This makes the service independently testable.
+
+---
+
+### Step 5 — Audio Upload API
+
+✅ Completed
+
+The FastAPI backend now accepts audio through:
+
+```text
+multipart/form-data
+```
+
+The transcription route follows the existing resource hierarchy:
+
+```text
+/users/{user_id}
+/language-profiles/{profile_id}
+/sessions/{practice_session_id}
+/transcriptions
+```
+
+Audio is validated before reaching the STT provider.
+
+Validation currently includes:
+
+- empty audio detection
+- supported MIME type
+- upload size limit
+- filename handling
+
+Maximum upload size is configurable:
+
+```dotenv
+MAX_AUDIO_UPLOAD_BYTES=10485760
+```
+
+Audio is processed in memory and is **not persisted**.
+
+Transcripts are also not persisted during this phase.
+
+No database migration was required for Phase 4.
+
+---
+
+### Step 6 — Backend Tests
+
+✅ Completed
+
+The Phase 4 backend is covered by unit and API tests.
+
+Current regression result:
+
+```text
+133 passed
+```
+
+Coverage introduced during this phase includes:
+
+#### Audio validation
+
+- WebM
+- MP4
+- MPEG
+- WAV
+- empty audio
+- missing MIME
+- unsupported MIME
+- maximum-size boundary
+- oversized uploads
+- fallback filename
+
+#### Multipart transcription API
+
+Tests verify:
+
+```text
+multipart upload
+      ↓
+FastAPI
+      ↓
+audio validation
+      ↓
+TranscriptionService
+      ↓
+TranscriptionResult
+```
+
+The API tests use fake transcription services.
+
+No real OpenAI request is performed.
+
+#### Error mapping
+
+The HTTP contract currently includes:
+
+| Condition | HTTP |
+|---|---:|
+| Empty audio | `400` |
+| User/Profile/Session not found | `404` |
+| Inactive PracticeSession | `409` |
+| Audio too large | `413` |
+| Unsupported audio type | `415` |
+| Invalid multipart request | `422` |
+| STT configuration unavailable | `503` |
+| STT rate limit | `503` |
+| STT provider failure | `503` |
+| STT timeout | `504` |
+
+Internal provider information and API configuration details are not exposed to clients.
+
+---
+
+## Remaining Phase 4 Work
+
+The backend portion of the first voice cycle is now complete.
+
+Remaining work is primarily in the React frontend:
+
+```text
+Step 7
+Browser Audio Recording
+        ↓
+getUserMedia()
+        ↓
+MediaRecorder
+        ↓
+Audio Blob
+
+Step 8
+Audio Upload Integration
+        ↓
+FormData
+        ↓
+FastAPI
+
+Step 9
+Voice Interaction UX
+        ↓
+IDLE
+RECORDING
+RECORDED
+UPLOADING
+TRANSCRIBING
+SUCCESS
+ERROR
+
+Step 10
+Frontend Tests
+
+Step 11
+Real French / English STT Validation
+
+Step 12
+Integration / E2E
+        ↓
+Phase 4 Closure
+```
+
+---
+
+# Voice Recording Design
+
+The frontend will use native browser APIs rather than a heavy audio library:
+
+```text
+navigator.mediaDevices.getUserMedia()
+                ↓
+           MediaStream
+                ↓
+          MediaRecorder
+                ↓
+            chunks[]
+                ↓
+              Blob
+```
+
+MIME support will be determined using:
+
+```typescript
+MediaRecorder.isTypeSupported(...)
+```
+
+The browser recording layer will not contain OpenAI-specific logic.
+
+---
+
+# Security Principles
+
+The project follows several security boundaries.
+
+### API credentials
+
+`OPENAI_API_KEY` exists only on the backend.
+
+Never place provider credentials in:
+
+```text
+frontend/.env
+VITE_*
+React source code
+Git
+browser storage
+API responses
+logs
+```
+
+### Audio
+
+Audio is currently:
+
+```text
+received
+   ↓
+validated
+   ↓
+transcribed
+   ↓
+discarded
+```
+
+Raw audio is not stored.
+
+### Transcript
+
+During Phase 4, transcripts are returned to the frontend but are not persisted.
+
+### Ownership
+
+Every transcription belongs to:
+
+```text
+User
+ ↓
+LanguageProfile
+ ↓
+PracticeSession
+```
+
+A session belonging to another profile or user must not be usable for transcription.
+
+---
+
+# Testing Strategy
+
+The project favors isolated tests and explicit architectural boundaries.
+
+The STT provider is replaced by fakes during automated tests:
+
+```text
+Production
+
+TranscriptionService
+        ↓
+OpenAISpeechToText
+        ↓
+OpenAI
+
+
+Tests
+
+TranscriptionService
+        ↓
+FakeSpeechToText
+```
+
+This provides:
+
+- deterministic tests
+- no external API dependency
+- no API cost during testing
+- faster execution
+- controlled error simulation
+
+Current backend status:
+
+```text
+133 passed
+0 warnings
+0 real OpenAI calls
+```
+
+---
+
+# Environment Configuration
+
+Example backend environment configuration:
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://...
+
+OPENAI_API_KEY=
+OPENAI_STT_MODEL=gpt-transcribe
+OPENAI_STT_TIMEOUT_SECONDS=30
+
+MAX_AUDIO_UPLOAD_BYTES=10485760
+```
+
+Use the repository's `.env.example` as the configuration reference.
+
+Never commit the real `.env` file.
+
+---
+
+# Running the Backend
+
+From the backend directory:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Run tests with:
+
+```bash
+pytest
+```
+
+Current expected backend regression:
+
+```text
+133 passed
+```
+
+---
+
+# Running the Frontend
+
+From the frontend directory:
+
+```bash
 npm install
 npm run dev
 ```
 
-Frontend:
+Run frontend tests with:
 
-```text
-http://localhost:5173
-```
-
-Default frontend API configuration:
-
-```text
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-The backend permits the local Vite development origins configured in `CORS_ORIGINS`.
-
-## Tests
-
-Backend:
-
-```powershell
-cd backend
-pytest -q
-alembic check
-```
-
-Current expected backend result at this milestone:
-
-```text
-62 passed
-```
-
-Frontend:
-
-```powershell
-cd frontend
+```bash
 npm test
+```
+
+Create a production build with:
+
+```bash
 npm run build
 ```
 
-Current frontend suite contains 5 tests covering the important Phase 2 user flows: backend status, user selection/creation, data-driven language-profile form, profile creation request and profile editing.
+---
 
-## Migration chain
+# Local Network Development
+
+The application is designed to run locally during its initial development phases.
+
+The backend and frontend may be exposed on the local network for testing from another device.
+
+However, browser microphone access has additional security requirements.
+
+`getUserMedia()` generally requires a **secure browser context**.
+
+While:
 
 ```text
-<base>
-  ↓
-0001_phase2_schema
-  ↓
-0002_phase2_reference_data (head)
+http://localhost
 ```
 
-There is no frontend-related database migration. `alembic check` should continue to report no new upgrade operations.
+is treated specially by browsers, accessing the application through a LAN address such as:
 
-## Out of scope
+```text
+http://192.168.x.x
+```
 
-The following remain intentionally outside Phase 2:
+may prevent microphone access.
 
-- Session / Session Context
-- microphone and audio upload
-- Speech-to-Text / Text-to-Speech
-- OpenAI or other LLM integration
-- conversations/interactions
-- mistakes and vocabulary
-- scenarios and progress engine
-- authentication/OAuth
-- cloud deployment
-- RAG/vector databases/agents
+Changing CORS to:
 
-## Next milestone
+```text
+*
+```
 
-After Step 10 is validated locally, the remaining Phase 2 work is end-to-end validation and final handoff/documentation before beginning **Phase 3 — Session Context**.
+does not solve this requirement.
+
+Local HTTPS may therefore be required when testing microphone recording from a phone or another device on the LAN.
+
+CORS and browser secure-context requirements should be treated as separate concerns.
+
+---
+
+# Development Principles
+
+The project follows several architectural principles:
+
+1. **Local-first development**
+2. **Incremental delivery**
+3. **Explicit service boundaries**
+4. **Provider isolation**
+5. **Backend-controlled AI credentials**
+6. **Session-based learning context**
+7. **Testability before provider integration**
+8. **No unnecessary framework abstractions**
+9. **No premature persistence**
+10. **No premature realtime architecture**
+
+The project intentionally uses the simplest architecture capable of supporting the current phase.
+
+---
+
+# Technology Stack
+
+## Backend
+
+```text
+Python
+FastAPI
+Pydantic
+SQLAlchemy
+Alembic
+PostgreSQL
+OpenAI Python SDK
+Pytest
+```
+
+## Frontend
+
+```text
+React
+TypeScript
+Vite
+Vitest
+React Testing Library
+Browser Media APIs
+```
+
+## AI
+
+Current:
+
+```text
+OpenAI Speech-to-Text
+```
+
+Future phases are expected to introduce conversational AI and communication coaching behind similarly isolated service boundaries.
+
+---
+
+# Roadmap
+
+The long-term direction is to evolve the application from:
+
+```text
+Language Profile
+      ↓
+Practice Session
+      ↓
+Voice
+      ↓
+Transcript
+```
+
+tow
