@@ -137,6 +137,7 @@ export default function App() {
             </div>
           ) : practicingProfile && activeSession ? (
             <PracticeSessionStarted
+              userId={selectedUser.id}
               profile={practicingProfile}
               session={activeSession}
               onBack={() => {

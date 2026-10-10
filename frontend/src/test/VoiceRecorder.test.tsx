@@ -1,8 +1,16 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VoiceRecorder } from "../components/VoiceRecorder";
+
+import { api } from "../api/client";
+
+const voiceRecorderProps = {
+  userId: "test-user-id",
+  profileId: "test-profile-id",
+  practiceSessionId: "test-session-id",
+};
 
 class MockMediaRecorder {
   static isTypeSupported = vi.fn(
@@ -68,9 +76,16 @@ function createMockStream() {
   };
 }
 
+vi.mock("../api/client", () => ({
+  api: {
+    transcribeAudio: vi.fn(),
+  },
+}));
+
 describe("VoiceRecorder", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(api.transcribeAudio).mockReset();
 
     Object.defineProperty(window, "isSecureContext", {
       configurable: true,
@@ -94,14 +109,236 @@ describe("VoiceRecorder", () => {
       writable: true,
       value: vi.fn(),
     });
+
   });
+
+  async function recordAudio(user: ReturnType<typeof userEvent.setup>) {
+      const { stream } = createMockStream();
+
+      Object.defineProperty(navigator, "mediaDevices", {
+        configurable: true,
+        value: {
+          getUserMedia: vi.fn().mockResolvedValue(stream),
+        },
+      });
+
+      render(<VoiceRecorder {...voiceRecorderProps} />);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Start recording",
+        }),
+      );
+
+      await screen.findByText("Recording...");
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Stop recording",
+        }),
+      );
+
+      await screen.findByText("Recording ready.");
+    }
+
+  it("sends recorded audio with the correct session context", async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(api.transcribeAudio).mockResolvedValue({
+        transcript: "Bonjour, comment allez-vous?",
+        language: "fr",
+      });
+
+      await recordAudio(user);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Transcribe recording",
+        }),
+      );
+
+      await waitFor(() => {
+        expect(api.transcribeAudio).toHaveBeenCalledOnce();
+      });
+
+      expect(api.transcribeAudio).toHaveBeenCalledWith(
+        voiceRecorderProps.userId,
+        voiceRecorderProps.profileId,
+        voiceRecorderProps.practiceSessionId,
+        expect.any(Blob),
+        "webm",
+      );
+    });
+
+
+
+  it("displays the transcript after successful transcription", async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(api.transcribeAudio).mockResolvedValue({
+        transcript: "Je travaille dans une banque.",
+        language: "fr",
+      });
+
+      await recordAudio(user);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Transcribe recording",
+        }),
+      );
+
+      expect(
+        await screen.findByText("Je travaille dans une banque."),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByRole("heading", {
+          name: "Transcript",
+        }),
+      ).toBeInTheDocument();
+    });
+
+  it("disables transcription and reset while uploading", async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(api.transcribeAudio).mockImplementation(
+        () => new Promise(() => {}),
+      );
+
+      await recordAudio(user);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Transcribe recording",
+        }),
+      );
+
+      expect(
+        await screen.findByText("Uploading and transcribing audio..."),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByRole("button", {
+          name: "Transcribing...",
+        }),
+      ).toBeDisabled();
+
+      expect(
+        screen.getByRole("button", {
+          name: "Record again",
+        }),
+      ).toBeDisabled();
+
+      expect(api.transcribeAudio).toHaveBeenCalledOnce();
+    });
+
+  it("shows a safe error message when transcription fails", async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(api.transcribeAudio).mockRejectedValue(
+        new Error("Internal provider error"),
+      );
+
+      await recordAudio(user);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Transcribe recording",
+        }),
+      );
+
+      expect(
+        await screen.findByRole("alert"),
+      ).toHaveTextContent(
+        "Unable to transcribe the recording. Please try again.",
+      );
+
+      expect(
+        screen.queryByText("Internal provider error"),
+      ).not.toBeInTheDocument();
+    });
+
+
+  it("allows retry after a transcription failure", async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(api.transcribeAudio)
+        .mockRejectedValueOnce(new Error("Temporary failure"))
+        .mockResolvedValueOnce({
+          transcript: "Hello, this is my second attempt.",
+          language: "en",
+        });
+
+      await recordAudio(user);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Transcribe recording",
+        }),
+      );
+
+      await screen.findByRole("alert");
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Transcribe recording",
+        }),
+      );
+
+      expect(
+        await screen.findByText("Hello, this is my second attempt."),
+      ).toBeInTheDocument();
+
+      expect(api.transcribeAudio).toHaveBeenCalledTimes(2);
+
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+
+
+  it("clears the transcript when recording again", async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(api.transcribeAudio).mockResolvedValue({
+        transcript: "This transcript should disappear.",
+        language: "en",
+      });
+
+      await recordAudio(user);
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Transcribe recording",
+        }),
+      );
+
+      await screen.findByText("This transcript should disappear.");
+
+      await user.click(
+        screen.getByRole("button", {
+          name: "Record again",
+        }),
+      );
+
+      expect(
+        screen.queryByText("This transcript should disappear."),
+      ).not.toBeInTheDocument();
+
+      expect(
+        screen.getByRole("button", {
+          name: "Start recording",
+        }),
+      ).toBeInTheDocument();
+    });
+
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
   it("starts in the idle state", () => {
-    render(<VoiceRecorder />);
+    render(<VoiceRecorder {...voiceRecorderProps} />);
 
     expect(
       screen.getByRole("button", {
@@ -129,7 +366,7 @@ describe("VoiceRecorder", () => {
       },
     });
 
-    render(<VoiceRecorder />);
+    render(<VoiceRecorder {...voiceRecorderProps} />);
 
     await user.click(
       screen.getByRole("button", {
@@ -163,7 +400,7 @@ describe("VoiceRecorder", () => {
       },
     });
 
-    render(<VoiceRecorder />);
+    render(<VoiceRecorder {...voiceRecorderProps} />);
 
     await user.click(
       screen.getByRole("button", {
@@ -211,7 +448,7 @@ describe("VoiceRecorder", () => {
       },
     });
 
-    render(<VoiceRecorder />);
+    render(<VoiceRecorder {...voiceRecorderProps} />);
 
     await user.click(
       screen.getByRole("button", {
@@ -261,7 +498,7 @@ describe("VoiceRecorder", () => {
       },
     });
 
-    render(<VoiceRecorder />);
+    render(<VoiceRecorder {...voiceRecorderProps} />);
 
     await user.click(
       screen.getByRole("button", {
@@ -290,7 +527,7 @@ describe("VoiceRecorder", () => {
       value: false,
     });
 
-    render(<VoiceRecorder />);
+    render(<VoiceRecorder {...voiceRecorderProps} />);
 
     await user.click(
       screen.getByRole("button", {
@@ -316,7 +553,7 @@ describe("VoiceRecorder", () => {
       },
     });
 
-    render(<VoiceRecorder />);
+    render(<VoiceRecorder {...voiceRecorderProps} />);
 
     await user.click(
       screen.getByRole("button", {

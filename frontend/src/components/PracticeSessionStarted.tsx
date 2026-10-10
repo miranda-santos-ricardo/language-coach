@@ -4,6 +4,7 @@ import type {
 } from "../api/types";
 
 interface PracticeSessionStartedProps {
+  userId: string;
   profile: LanguageProfile;
   session: PracticeSession;
   onBack: () => void;
@@ -30,6 +31,7 @@ function trainingModeLabel(
 }
 
 export function PracticeSessionStarted({
+  userId,
   profile,
   session,
   onBack,
@@ -68,7 +70,11 @@ export function PracticeSessionStarted({
         Back to languages
       </button>
 
-      <VoiceRecorder />
+      <VoiceRecorder
+        userId={userId}
+        profileId={profile.id}
+        practiceSessionId={session.id}
+      />
     </section>
   );
 }

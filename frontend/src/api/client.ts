@@ -48,7 +48,11 @@ function errorMessage(payload: unknown, fallback: string): string {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  if (init?.body !== undefined && !headers.has("Content-Type")) {
+  if (
+    init?.body !== undefined &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -72,6 +76,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   return response.json() as Promise<T>;
 }
+
+
+export interface TranscriptionResult {
+  transcript: string;
+  language: string;
+}
+
 
 export const api = {
   health: () => request<{ status: string }>("/health"),
@@ -139,4 +150,32 @@ getPracticeSession: (
   request<PracticeSession>(
     `/users/${userId}/language-profiles/${profileId}/sessions/${sessionId}`,
   ),
+
+
+transcribeAudio: (
+  userId: string,
+  profileId: string,
+  sessionId: string,
+  audio: Blob,
+  extension: string,
+) => {
+  const formData = new FormData();
+
+  formData.append(
+    "audio",
+    audio,
+    `recording.${extension}`,
+  );
+
+  return request<TranscriptionResult>(
+    `/users/${encodeURIComponent(userId)}` +
+      `/language-profiles/${encodeURIComponent(profileId)}` +
+      `/sessions/${encodeURIComponent(sessionId)}` +
+      `/transcriptions`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+},
 };
