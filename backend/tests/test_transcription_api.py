@@ -572,3 +572,44 @@ def test_transcription_endpoint_returns_504_on_stt_timeout(
 
     assert response.status_code == 504
     assert "Provider request timed out" not in response.text
+
+from app.services.transcription_errors import TranscriptionContextError
+
+
+def test_transcription_endpoint_returns_422_on_invalid_context(
+    api_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_service = FailingTranscriptionService(
+        TranscriptionContextError(
+            "Internal language variant information is missing."
+        )
+    )
+
+    monkeypatch.setattr(
+        practice_sessions,
+        "get_transcription_service",
+        lambda: fake_service,
+    )
+
+    response = api_client.post(
+        transcription_url(
+            uuid.uuid4(),
+            uuid.uuid4(),
+            uuid.uuid4(),
+        ),
+        files={
+            "audio": (
+                "recording.webm",
+                b"fake-audio",
+                "audio/webm",
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Practice session has an invalid transcription context."
+    )
+    assert "Internal language variant information" not in response.text
+    assert fake_service.calls == 1

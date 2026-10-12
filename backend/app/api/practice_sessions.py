@@ -49,6 +49,7 @@ from app.services.transcription_dependencies import (
 )
 
 from app.services.transcription_errors import (
+    TranscriptionContextError,
     TranscriptionSessionInactiveError,
 )
 
@@ -265,7 +266,10 @@ def transcribe_practice_session_audio(
     try:
         settings = get_settings()
 
-        content = audio.file.read()
+        #content = audio.file.read()
+        # Read at most one byte beyond the configured limit.
+        # This avoids loading an arbitrarily large upload into memory.
+        content = audio.file.read(settings.max_audio_upload_bytes + 1)
 
         validated_audio = validate_audio_upload(
             content=content,
@@ -318,6 +322,12 @@ def transcribe_practice_session_audio(
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=str(exc),
+        ) from exc
+    
+    except TranscriptionContextError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Practice session has an invalid transcription context.",
         ) from exc
 
     except STTConfigurationError as exc:
