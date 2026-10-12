@@ -8,4 +8,14 @@ export default defineConfig({
     setupFiles: "./src/test/setup.ts",
     css: true,
   },
+  server: {
+    host: "0.0.0.0",
+    port: 5173,
+
+    allowedHosts: [
+      "localhost",
+      "192.168.2.25",
+      ".ts.net"
+    ]
+  }
 });
