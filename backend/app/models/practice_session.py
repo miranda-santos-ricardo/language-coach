@@ -18,6 +18,7 @@ from app.models.enums import CEFRLevel, SessionStatus, TrainingMode
 from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.conversation_turn import ConversationTurn
     from app.models.communication_register import CommunicationRegister
     from app.models.language_profile import LanguageProfile
 
@@ -140,6 +141,10 @@ class PracticeSession(TimestampMixin, Base):
 
     communication_register: Mapped["CommunicationRegister"] = relationship(
         back_populates="practice_sessions",
+    )
+
+    conversation_turns: Mapped[list["ConversationTurn"]] = relationship(
+        back_populates="practice_session", passive_deletes=True
     )
 
     @property

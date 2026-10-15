@@ -5,7 +5,7 @@ from alembic.script import ScriptDirectory
 
 SCHEMA_REVISION = "0001_phase2_schema"
 REFERENCE_DATA_REVISION = "ba35d4c616d6"
-EXPECTED_HEAD = REFERENCE_DATA_REVISION
+EXPECTED_HEAD = "c5202601"
 
 
 def _script_directory() -> ScriptDirectory:
