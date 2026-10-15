@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     ]
 
     openai_api_key: str | None = None
+    openai_conversation_model: str = "gpt-4o-mini"
+    openai_conversation_timeout_seconds: float = 30.0
     openai_stt_model: str = "gpt-transcribe"
     openai_stt_timeout_seconds: float = 30.0
     
