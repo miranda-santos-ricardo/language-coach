@@ -1,40 +1,36 @@
-# Phase 5 / Step 2 / Increment 2
+# Phase 5 / Step 7 / Increment 1 — Submit Conversation Turn API
 
-Apply over an installation where Increment 1 is already applied. Only `backend/tests/test_conversation_persistence.py` changes. No new migrations, endpoint changes, or schema changes.
+Incremental patch on top of validated Step 6.2. Extract from repository root.
 
-## Tests added
-- Rollback of a successfully flushed turn and feedback
-- Failed subsequent transaction preserves previously committed turn
-- Request ID scoped to practice session
-- DB CHECK constraints for index, modality and space-only inputs
-- DB foreign keys reject orphan records
-- Pagination limits and offsets
+## Files
+- New backend/app/schemas/conversation.py
+- New backend/app/services/conversation_api_dependencies.py
+- New backend/app/api/conversation_turns.py
+- Modified backend/app/api/router.py
+- New backend/tests/test_conversation_submit_api.py
 
 ## Commands
 ```bash
 cd backend
-python -m pytest -q tests/test_conversation_persistence.py
-python -m pytest -q tests/test_migrations.py tests/test_models.py
+python -m pytest -q tests/test_conversation_submit_api.py
 python -m pytest -q
-alembic heads
 alembic current
 ```
 
-Expected: 14 tests in `test_conversation_persistence.py`, all passing. `alembic heads` should show `c5202601`; `alembic current` should show `c5202601` if previously upgraded. No migration is required for this increment.
+Expected: 17 directed tests and baseline 240 + 17 = 257 backend tests (subject to test environment and collection). Alembic revision c5202601 (head). No migration, frontend modifications, or API token usage in tests.
 
-## PostgreSQL-only optional verification
-Use a disposable local development/test PostgreSQL database; never test downgrade on your real populated database.
+## Contract
+POST /users/{user_id}/language-profiles/{profile_id}/sessions/{practice_session_id}/turns
 
-```bash
-# Point DATABASE_URL at a disposable PostgreSQL database using your project's config.
-alembic upgrade head
-alembic current
-alembic downgrade ba35d4c616d6
-alembic upgrade head
-```
+JSON request: text (1–4000 chars), input_modality (`text`/`voice`), client_request_id (UUID).
 
-## Known limits
-- These repository tests run against SQLite with FK enforcement, not PostgreSQL.
-- A SQL `trim()` check rejects space-only text but may accept other whitespace-only text such as tabs; Pydantic/service input validation must reject `not text.strip()` in Steps 5-7. A later DB constraint change would require a new migration, not rewriting applied `c5202601`.
-- Database uniqueness does not ensure exactly-once LLM execution under concurrent requests. Step 6 must enforce single-flight per session and the idempotency contract.
-- Full suite could not be collected in the packaging environment because `psycopg` and `openai` were not installed. Run the full suite in your configured project environment.
+201 response: turn_id, turn_index, coach_response, feedback (nested structured schema), replayed, prompt_version, model. Replay returns 201 and replayed=true. Consider using 200 for replay if API consumers need it, but current contract uses 201 consistently.
+
+Error mapping: 400 invalid learner text after trim; 404 ownership chain; 409 inactive/busy/conflicting request; 422 invalid payload from Pydantic; 502 invalid provider output; 503 configuration/provider/db errors; 504 timeout. Unexpected exceptions are intentionally not intercepted. Authentication limitation remains. Do not expose this API publicly before real authentication.
+
+## Known limitations
+- Test suite could not be run in assistant container: `psycopg` missing; this is not a passing test claim.
+- Integration uses a fake LLM; production provider requires `OPENAI_API_KEY` and correct runtime network configuration.
+- Existing `ConversationService` controls transaction lifecycle and assumes a dedicated DB session.
+- PostgreSQL advisory lock must still be tested with two independent DB connections.
+- Reading history/detail endpoints are reserved for Step 7 Increment 2.
