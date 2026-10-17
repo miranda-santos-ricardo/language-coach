@@ -15,6 +15,14 @@ function newRequestId(): string {
   const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+// Keep pagination deterministic even if the server returns overlapping rows.
+export function mergeConversationTurns(previous: ConversationTurnDetail[], incoming: ConversationTurnDetail[], replace = false): ConversationTurnDetail[] {
+  const byId = new Map<string, ConversationTurnDetail>();
+  for (const turn of (replace ? [] : previous)) byId.set(turn.turn_id, turn);
+  for (const turn of incoming) byId.set(turn.turn_id, turn);
+  return [...byId.values()].sort((a, b) => a.turn_index - b.turn_index || a.turn_id.localeCompare(b.turn_id));
+}
+
 function errorText(reason: unknown): string {
   if (reason instanceof ApiError) {
     if (reason.status === 409) return `${reason.message} Please review the session and try again.`;
@@ -42,32 +50,46 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft }: 
   const [lastResult, setLastResult] = useState<TurnSubmitted | null>(null);
   const pending = useRef<{ text: string; modality: "text" | "voice"; id: string } | null>(null);
   const submittingRef = useRef(false);
-  const identity = `${userId}:${profileId}:${sessionId}`;
+  const identity = JSON.stringify([userId, profileId, sessionId]);
+  const activeIdentity = useRef(identity);
+  activeIdentity.current = identity;
+  const historyRequest = useRef(0);
+  const historyLoading = useRef(false);
 
   async function loadHistory(nextOffset: number, replace: boolean) {
+    if (historyLoading.current) return;
+    historyLoading.current = true;
+    const request = ++historyRequest.current;
+    const requestIdentity = identity;
     setHistoryBusy(true);
     setHistoryError(null);
     try {
       const page = await conversationsApi.list(context, PAGE_SIZE, nextOffset);
-      setHistory(previous => replace ? page.items : [...previous, ...page.items]);
+      if (activeIdentity.current !== requestIdentity || request !== historyRequest.current) return;
+      setHistory(previous => mergeConversationTurns(previous, page.items, replace));
+      // Offset counts server rows rather than unique rows, to avoid skipping pages.
       setOffset(nextOffset + page.items.length);
       setHasMore(page.items.length === PAGE_SIZE);
     } catch (reason) {
-      setHistoryError(reason instanceof Error ? reason.message : "Unable to load history");
+      if (activeIdentity.current === requestIdentity && request === historyRequest.current)
+        setHistoryError(reason instanceof Error ? reason.message : "Unable to load history");
     } finally {
-      setHistoryBusy(false);
+      if (activeIdentity.current === requestIdentity && request === historyRequest.current) {
+        historyLoading.current = false;
+        setHistoryBusy(false);
+      }
     }
   }
 
   useEffect(() => {
-    let cancelled = false;
+    // A prior session's pending responses cannot populate this session.
+    activeIdentity.current = identity;
+    historyLoading.current = false;
+    ++historyRequest.current;
     setDraft(""); setModality("text"); setLastResult(null); setSubmitError(null); pending.current = null;
-    setHistory([]); setOffset(0); setHasMore(false); setHistoryBusy(true); setHistoryError(null);
-    void conversationsApi.list({ userId, profileId, sessionId }, PAGE_SIZE, 0)
-      .then(page => { if (!cancelled) { setHistory(page.items); setOffset(page.items.length); setHasMore(page.items.length === PAGE_SIZE); } })
-      .catch(reason => { if (!cancelled) setHistoryError(reason instanceof Error ? reason.message : "Unable to load history"); })
-      .finally(() => { if (!cancelled) setHistoryBusy(false); });
-    return () => { cancelled = true; };
+    setHistory([]); setOffset(0); setHasMore(false); setHistoryBusy(false); setHistoryError(null);
+    void loadHistory(0, true);
+    return () => { ++historyRequest.current; };
   }, [identity]);
 
   // Moving a transcript into the editor is a separate, explicit user action.
@@ -87,6 +109,7 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft }: 
     if (submittingRef.current || !draft.trim() || draft.length > MAX_TEXT) return;
     submittingRef.current = true;
     setSubmitting(true); setSubmitError(null);
+    const submittedIdentity = identity;
     const text = draft.trim();
     const request = pending.current?.text === text && pending.current?.modality === modality ? pending.current : { text, modality, id: newRequestId() };
     pending.current = request;
@@ -94,11 +117,12 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft }: 
       const result = await conversationsApi.submit(context, {
         text, input_modality: modality, client_request_id: request.id,
       });
+      if (activeIdentity.current !== submittedIdentity) return;
       pending.current = null;
       setDraft(""); setModality("text"); setLastResult(result);
       await loadHistory(0, true);
     } catch (reason) {
-      setSubmitError(errorText(reason));
+      if (activeIdentity.current === submittedIdentity) setSubmitError(errorText(reason));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);

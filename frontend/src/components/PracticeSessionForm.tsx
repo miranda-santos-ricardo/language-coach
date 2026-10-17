@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
+import { ResumePracticeSessions } from "./ResumePracticeSessions";
 import type {
   CEFRLevel,
   CommunicationRegister,
@@ -164,6 +165,8 @@ export function PracticeSessionForm({
           {error}
         </div>
       )}
+
+      <ResumePracticeSessions userId={userId} profileId={profile.id} onResume={onStarted} />
 
       <form onSubmit={handleSubmit}>
         <fieldset>
