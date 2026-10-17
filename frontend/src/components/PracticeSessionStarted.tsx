@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { ConversationPanel } from "./ConversationPanel";
 import type {
   LanguageProfile,
   PracticeSession,
@@ -36,6 +38,10 @@ export function PracticeSessionStarted({
   session,
   onBack,
 }: PracticeSessionStartedProps) {
+  const [voiceDraft, setVoiceDraft] = useState<{ text: string; revision: number; sessionId: string } | null>(null);
+
+  useEffect(() => { setVoiceDraft(null); }, [session.id]);
+
   return (
     <section
       className="panel"
@@ -70,10 +76,13 @@ export function PracticeSessionStarted({
         Back to languages
       </button>
 
+      <ConversationPanel userId={userId} profileId={profile.id} sessionId={session.id} voiceDraft={voiceDraft?.sessionId === session.id ? voiceDraft : null} />
+
       <VoiceRecorder
         userId={userId}
         profileId={profile.id}
         practiceSessionId={session.id}
+        onUseTranscript={text => setVoiceDraft(previous => ({ text, sessionId: session.id, revision: (previous?.revision ?? 0) + 1 }))}
       />
     </section>
   );

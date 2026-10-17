@@ -84,3 +84,14 @@ input:focus, select:focus { border-color: #6685d4; box-shadow: 0 0 0 3px rgba(78
   .profile-grid, .profile-form { grid-template-columns: 1fr; }
   .checkbox-grid { grid-template-columns: 1fr; }
 }
+
+/* Phase 5 Step 8: text conversation, independent from VoiceRecorder */
+.conversation-panel { margin-top: 22px; padding: 18px; border: 1px solid #e2e7ef; border-radius: 14px; }
+.conversation-panel h3 { margin-top: 0; }
+.conversation-panel form { display: grid; gap: 10px; margin-top: 16px; }
+.conversation-panel textarea { width: 100%; padding: 10px; border: 1px solid #d0d5dd; border-radius: 10px; font: inherit; resize: vertical; }
+.conversation-panel form button { justify-self: start; }
+.conversation-history { list-style-position: inside; padding: 0; display: grid; gap: 12px; }
+.conversation-history > li { border: 1px solid #e5e9f0; padding: 12px; border-radius: 12px; overflow-wrap: anywhere; }
+.conversation-feedback { margin-top: 8px; font-size: .9rem; }
+.conversation-feedback summary { cursor: pointer; color: #3457b2; font-weight: 700; }

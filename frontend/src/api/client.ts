@@ -46,7 +46,7 @@ function errorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (
     init?.body !== undefined &&
@@ -85,27 +85,27 @@ export interface TranscriptionResult {
 
 
 export const api = {
-  health: () => request<{ status: string }>("/health"),
+  health: () => apiRequest<{ status: string }>("/health"),
 
-  listUsers: () => request<User[]>("/users"),
+  listUsers: () => apiRequest<User[]>("/users"),
   createUser: (displayName: string) =>
-    request<User>("/users", {
+    apiRequest<User>("/users", {
       method: "POST",
       body: JSON.stringify({ display_name: displayName }),
     }),
 
-  listLanguages: () => request<Language[]>("/languages"),
+  listLanguages: () => apiRequest<Language[]>("/languages"),
   listVariants: (languageCode: string) =>
-    request<LanguageVariant[]>(
+    apiRequest<LanguageVariant[]>(
       `/languages/${encodeURIComponent(languageCode)}/variants`,
     ),
   listRegisters: () =>
-    request<CommunicationRegister[]>("/communication-registers"),
+    apiRequest<CommunicationRegister[]>("/communication-registers"),
 
   listProfiles: (userId: string) =>
-    request<LanguageProfile[]>(`/users/${userId}/language-profiles`),
+    apiRequest<LanguageProfile[]>(`/users/${userId}/language-profiles`),
   createProfile: (userId: string, payload: LanguageProfilePayload) =>
-    request<LanguageProfile>(`/users/${userId}/language-profiles`, {
+    apiRequest<LanguageProfile>(`/users/${userId}/language-profiles`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -114,7 +114,7 @@ export const api = {
     profileId: string,
     payload: LanguageProfilePayload,
   ) =>
-    request<LanguageProfile>(
+    apiRequest<LanguageProfile>(
       `/users/${userId}/language-profiles/${profileId}`,
       {
         method: "PATCH",
@@ -126,7 +126,7 @@ export const api = {
   profileId: string,
   payload: PracticeSessionPayload,
 ) =>
-  request<PracticeSession>(
+  apiRequest<PracticeSession>(
     `/users/${userId}/language-profiles/${profileId}/sessions`,
     {
       method: "POST",
@@ -138,7 +138,7 @@ listPracticeSessions: (
   userId: string,
   profileId: string,
 ) =>
-  request<PracticeSession[]>(
+  apiRequest<PracticeSession[]>(
     `/users/${userId}/language-profiles/${profileId}/sessions`,
   ),
 
@@ -147,7 +147,7 @@ getPracticeSession: (
   profileId: string,
   sessionId: string,
 ) =>
-  request<PracticeSession>(
+  apiRequest<PracticeSession>(
     `/users/${userId}/language-profiles/${profileId}/sessions/${sessionId}`,
   ),
 
@@ -167,7 +167,7 @@ transcribeAudio: (
     `recording.${extension}`,
   );
 
-  return request<TranscriptionResult>(
+  return apiRequest<TranscriptionResult>(
     `/users/${encodeURIComponent(userId)}` +
       `/language-profiles/${encodeURIComponent(profileId)}` +
       `/sessions/${encodeURIComponent(sessionId)}` +

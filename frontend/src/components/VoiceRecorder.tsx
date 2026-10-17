@@ -7,6 +7,7 @@ interface VoiceRecorderProps {
   userId: string;
   profileId: string;
   practiceSessionId: string;
+  onUseTranscript?: (text: string) => void;
 }
 
 type TranscriptionStatus =
@@ -19,6 +20,7 @@ export function VoiceRecorder({
   userId,
   profileId,
   practiceSessionId,
+  onUseTranscript,
 }: VoiceRecorderProps) {
   const {
     status,
@@ -146,6 +148,11 @@ export function VoiceRecorder({
             <div aria-label="Transcription result">
               <h4>Transcript</h4>
               <p>{transcript}</p>
+              {onUseTranscript && (
+                <button type="button" onClick={() => onUseTranscript(transcript)}>
+                  Use transcript in coach
+                </button>
+              )}
             </div>
           )}
 

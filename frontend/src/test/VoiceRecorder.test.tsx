@@ -199,6 +199,29 @@ describe("VoiceRecorder", () => {
       ).toBeInTheDocument();
     });
 
+  it("only hands the transcript to the coach after explicit user action", async () => {
+      const user = userEvent.setup();
+      const onUseTranscript = vi.fn();
+      vi.mocked(api.transcribeAudio).mockResolvedValue({
+        transcript: "Je parle français.", language: "fr",
+      });
+      const { stream } = createMockStream();
+      Object.defineProperty(navigator, "mediaDevices", {
+        configurable: true,
+        value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+      });
+      render(<VoiceRecorder {...voiceRecorderProps} onUseTranscript={onUseTranscript} />);
+      await user.click(screen.getByRole("button", { name: "Start recording" }));
+      await screen.findByText("Recording...");
+      await user.click(screen.getByRole("button", { name: "Stop recording" }));
+      await screen.findByText("Recording ready.");
+      await user.click(screen.getByRole("button", { name: "Transcribe recording" }));
+      expect(await screen.findByText("Je parle français.")).toBeInTheDocument();
+      expect(onUseTranscript).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "Use transcript in coach" }));
+      expect(onUseTranscript).toHaveBeenCalledExactlyOnceWith("Je parle français.");
+    });
+
   it("disables transcription and reset while uploading", async () => {
       const user = userEvent.setup();
 
