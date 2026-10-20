@@ -6,6 +6,8 @@ import type { ConversationContextIds, ConversationTurnDetail, TurnSubmitted } fr
 import { LanguageFeedbackPanel } from "./LanguageFeedbackPanel";
 import { createBrowserSpeechEngine } from "../services/browserSpeech";
 import type { SpeechEngine, SpeechSnapshot } from "../services/browserSpeech";
+import { canonicalSpeechLocale, compatibleSpeechVoices, loadSpeechPreferences, saveSpeechPreferences } from "../services/speechPreferences";
+import type { SpeechPreferences } from "../services/speechPreferences";
 
 const PAGE_SIZE = 50;
 const MAX_TEXT = 4000;
@@ -37,20 +39,22 @@ function errorText(reason: unknown): string {
 interface ConversationPanelProps extends ConversationContextIds {
   voiceDraft?: { text: string; revision: number } | null;
   speechLocale?: string;
+  onRegisterSpeechStop?: (stop: (() => void) | null) => void;
 }
 
-function CoachAudioControls({ engine, snapshot, turnId, text, locale }: {
-  engine: SpeechEngine; snapshot: SpeechSnapshot; turnId: string; text: string; locale: string;
+function CoachAudioControls({ engine, snapshot, turnId, text, locale, preferences }: {
+  engine: SpeechEngine; snapshot: SpeechSnapshot; turnId: string; text: string; locale: string; preferences: SpeechPreferences;
 }) {
   const active = snapshot.turnId === turnId;
   const speaking = active && snapshot.status === "speaking";
   const paused = active && snapshot.status === "paused";
   const [failure, setFailure] = useState<string | null>(null);
-  const [rate, setRate] = useState<0.75 | 1 | 1.25>(1);
 
   function play() {
     setFailure(null);
-    const result = engine.speak({ turnId, text, locale, rate });
+    const preferredVoiceURI = preferences.voiceByLocale[canonicalSpeechLocale(locale)];
+    const result = engine.speak({ turnId, text, locale, rate: preferences.rate,
+      ...(preferredVoiceURI ? { preferredVoiceURI } : {}) });
     if (!result.ok) setFailure(result.reason === "voice-unavailable"
       ? `No compatible voice is installed for ${locale}.`
       : result.reason === "unsupported" ? "Speech playback is not supported in this browser."
@@ -63,9 +67,6 @@ function CoachAudioControls({ engine, snapshot, turnId, text, locale }: {
     {paused && <button type="button" onClick={() => engine.resume()}>Resume</button>}
     {(speaking || paused) && <button type="button" onClick={() => engine.stop()}>Stop</button>}
     <button type="button" onClick={play} disabled={!engine.available}>Repeat</button>
-    <label>Playback speed <select value={rate} onChange={event => setRate(Number(event.target.value) as 0.75 | 1 | 1.25)}>
-      <option value={0.75}>0.75×</option><option value={1}>1×</option><option value={1.25}>1.25×</option>
-    </select></label>
     {active && snapshot.voiceMatch === "language-fallback" && <span role="status">Using {snapshot.selectedLocale} voice instead of {locale}.</span>}
     {active && snapshot.status === "error" && <span role="alert">{snapshot.error ?? "Speech playback failed"}</span>}
     {failure && <span role="alert">{failure}</span>}
@@ -73,15 +74,38 @@ function CoachAudioControls({ engine, snapshot, turnId, text, locale }: {
   </div>;
 }
 
-export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, speechLocale = "en-CA" }: ConversationPanelProps) {
+export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, speechLocale = "en-CA", onRegisterSpeechStop }: ConversationPanelProps) {
   const context = { userId, profileId, sessionId };
   const speechRef = useRef<SpeechEngine | null>(null);
   if (!speechRef.current) speechRef.current = createBrowserSpeechEngine();
   const speech = speechRef.current;
   const [speechSnapshot, setSpeechSnapshot] = useState<SpeechSnapshot>(() => speech.getSnapshot());
+  const [preferences, setPreferences] = useState<SpeechPreferences>(loadSpeechPreferences);
+  const [, setVoiceListRevision] = useState(0);
+  const speechEffectGeneration = useRef(0);
+  const currentLocale = canonicalSpeechLocale(speechLocale);
+  const voiceOptions = compatibleSpeechVoices(speech.getVoices(), currentLocale);
+  const selectedVoice = preferences.voiceByLocale[currentLocale] ?? "";
+  function updatePreferences(next: SpeechPreferences) { setPreferences(next); saveSpeechPreferences(next); }
+  const autoplaySeen = useRef<string | null>(null);
   useEffect(() => {
-    const unsubscribe = speech.subscribe(setSpeechSnapshot);
-    return () => { unsubscribe(); speech.dispose(); };
+    onRegisterSpeechStop?.(() => speech.stop());
+    return () => onRegisterSpeechStop?.(null);
+  }, [onRegisterSpeechStop, speech]);
+  useEffect(() => {
+    // React StrictMode replays effect setup/cleanup during development. Do not
+    // permanently dispose the instance during its simulated unmount: the same
+    // engine is reused when the effect is immediately set up again.
+    const generation = ++speechEffectGeneration.current;
+    const unsubscribe = speech.subscribe(next => { setSpeechSnapshot(next); setVoiceListRevision(v => v + 1); });
+    return () => {
+      unsubscribe();
+      speech.stop();
+      queueMicrotask(() => {
+        // A replayed setup has a newer generation. A real unmount does not.
+        if (speechEffectGeneration.current === generation) speech.dispose();
+      });
+    };
   }, [speech]);
   const [draft, setDraft] = useState("");
   const [modality, setModality] = useState<"text" | "voice">("text");
@@ -93,6 +117,16 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, sp
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<TurnSubmitted | null>(null);
+  // Never autoplay initial history, paginated history, or resumed sessions.
+  // Only autoplay a newly submitted response in this mounted panel.
+  useEffect(() => {
+    if (!lastResult || !preferences.autoplay) return;
+    const key = `${identity}:${lastResult.turn_id}`;
+    if (autoplaySeen.current === key) return;
+    autoplaySeen.current = key;
+    speech.speak({ turnId: lastResult.turn_id, text: lastResult.coach_response, locale: speechLocale,
+      rate: preferences.rate, ...(preferences.voiceByLocale[currentLocale] ? { preferredVoiceURI: preferences.voiceByLocale[currentLocale] } : {}) });
+  }, [lastResult]);
   const pending = useRef<{ text: string; modality: "text" | "voice"; id: string } | null>(null);
   const submittingRef = useRef(false);
   const identity = JSON.stringify([userId, profileId, sessionId]);
@@ -128,6 +162,7 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, sp
 
   useEffect(() => {
     speech.stop();
+    autoplaySeen.current = null;
     // A prior session's pending responses cannot populate this session.
     activeIdentity.current = identity;
     historyLoading.current = false;
@@ -178,6 +213,22 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, sp
   return <section className="conversation-panel" aria-labelledby="conversation-title">
     <h3 id="conversation-title">AI Conversation Coach</h3>
     <p className="muted">Type a message, or move a transcript into the editor to review it before sending.</p>
+    <fieldset aria-label="Coach voice preferences" className="coach-voice-preferences">
+      <legend>Coach voice preferences</legend>
+      <label><input type="checkbox" checked={preferences.autoplay}
+        onChange={event => updatePreferences({ ...preferences, autoplay: event.target.checked })} />
+        Automatically play new coach responses</label>
+      <label>Playback speed <select value={preferences.rate}
+        onChange={event => updatePreferences({ ...preferences, rate: Number(event.target.value) as SpeechPreferences["rate"] })}>
+        <option value={0.75}>0.75×</option><option value={1}>1×</option><option value={1.25}>1.25×</option>
+      </select></label>
+      <label>Voice for {currentLocale} <select aria-label={`Voice for ${currentLocale}`} value={voiceOptions.some(v => v.voiceURI === selectedVoice) ? selectedVoice : ""}
+        onChange={event => updatePreferences({ ...preferences, voiceByLocale: { ...preferences.voiceByLocale, [currentLocale]: event.target.value } })}>
+        <option value="">Automatic (prefer {currentLocale})</option>
+        {voiceOptions.map(voice => <option key={`${voice.voiceURI}:${voice.lang}`} value={voice.voiceURI}>{voice.name} ({voice.lang})</option>)}
+      </select></label>
+      {voiceOptions.length === 0 && <p className="muted">No compatible voice is currently installed for {currentLocale}.</p>}
+    </fieldset>
     {historyBusy && <p role="status">Loading conversation history…</p>}
     {historyError && <div role="alert">{historyError} <button type="button" onClick={() => void loadHistory(0, true)}>Retry history</button></div>}
     <ol className="conversation-history" aria-label="Conversation history">
@@ -185,7 +236,7 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, sp
         <p><strong>You:</strong> {turn.learner_text}</p>
         <p><strong>Coach:</strong> {turn.coach_response}</p>
         <CoachAudioControls key={`${identity}:${turn.turn_id}`} engine={speech} snapshot={speechSnapshot} turnId={turn.turn_id}
-          text={turn.coach_response} locale={speechLocale} />
+          text={turn.coach_response} locale={speechLocale} preferences={preferences} />
         <LanguageFeedbackPanel feedback={turn.feedback} />
       </li>)}
     </ol>
@@ -193,7 +244,7 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, sp
     {lastResult && !history.some(turn => turn.turn_id === lastResult.turn_id) && <div aria-label="Latest coach response">
       <p><strong>Coach:</strong> {lastResult.coach_response}</p>
       <CoachAudioControls key={`${identity}:${lastResult.turn_id}`} engine={speech} snapshot={speechSnapshot} turnId={lastResult.turn_id}
-        text={lastResult.coach_response} locale={speechLocale} />
+        text={lastResult.coach_response} locale={speechLocale} preferences={preferences} />
       <LanguageFeedbackPanel feedback={lastResult.feedback} />
     </div>}
     <form onSubmit={event => void submit(event)}>

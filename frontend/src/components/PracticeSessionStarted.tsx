@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { ConversationPanel } from "./ConversationPanel";
 import type {
@@ -39,6 +39,8 @@ export function PracticeSessionStarted({
   session,
   onBack,
 }: PracticeSessionStartedProps) {
+  const stopSpeech = useRef<(() => void) | null>(null);
+  const registerStopSpeech = (stop: (() => void) | null) => { stopSpeech.current = stop; };
   const [confirmCompletion, setConfirmCompletion] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -60,6 +62,7 @@ export function PracticeSessionStarted({
       if (completed.id !== session.id || completed.status !== "completed") {
         throw new Error("The server did not confirm session completion.");
       }
+      stopSpeech.current?.();
       onBack();
     } catch (reason) {
       setCompletionError(reason instanceof Error ? reason.message : "Unable to complete session.");
@@ -98,7 +101,7 @@ export function PracticeSessionStarted({
         <button
           type="button"
           className="button button--ghost"
-          onClick={onBack}
+          onClick={() => { stopSpeech.current?.(); onBack(); }}
           disabled={completing}
         >
           Leave &amp; Resume Later
@@ -131,12 +134,13 @@ export function PracticeSessionStarted({
         </div>
       )}
 
-      <ConversationPanel userId={userId} profileId={profile.id} sessionId={session.id} speechLocale={session.variant || profile.variant.code || session.language} voiceDraft={voiceDraft?.sessionId === session.id ? voiceDraft : null} />
+      <ConversationPanel onRegisterSpeechStop={registerStopSpeech} userId={userId} profileId={profile.id} sessionId={session.id} speechLocale={session.variant || profile.variant.code || session.language} voiceDraft={voiceDraft?.sessionId === session.id ? voiceDraft : null} />
 
       <VoiceRecorder
         userId={userId}
         profileId={profile.id}
         practiceSessionId={session.id}
+        onRecordingStart={() => stopSpeech.current?.()}
         onUseTranscript={text => setVoiceDraft(previous => ({ text, sessionId: session.id, revision: (previous?.revision ?? 0) + 1 }))}
       />
     </section>

@@ -1,31 +1,41 @@
-# Phase 6 — Step 2: Coach Audio Playback
+# Phase 6 Step 3 — VOX-001 Preferences & Autoplay
 
-## Scope
-- `frontend/src/components/ConversationPanel.tsx` — per-turn controls, shared speech engine, session lifecycle cancellation.
-- `frontend/src/components/PracticeSessionStarted.tsx` — pass effective session locale.
-- `frontend/src/test/CoachAudioPlayback.test.tsx` — seven integration tests with fake speech engine.
+## Installation
+Extract this ZIP at the root of `language-coach/`, overwriting the included frontend paths only. Keep your Step 1 and Step 2 changes in place.
 
-No backend/database/migration/OpenAI changes. Autoplay intentionally absent.
+## Files
+- `frontend/src/services/speechPreferences.ts` (new): resilient localStorage preferences with default autoplay OFF and locale-specific voice choices.
+- `frontend/src/components/ConversationPanel.tsx` (updated): voice settings UI and autoplay only after a newly submitted turn; stops on session change and unmount.
+- `frontend/src/components/PracticeSessionStarted.tsx` (updated): synchronous TTS stop callback on Leave and confirmed Complete; connects recorder.
+- `frontend/src/components/VoiceRecorder.tsx` (updated): optional callback before `startRecording` (STT workflow unchanged).
+- `frontend/src/test/CoachAudioPlayback.test.tsx` (updated): playback speed is now a shared session preference; retains previous Step 2 act() fix.
+- `frontend/src/test/speechPreferences.test.ts` (new): persistence and voice selection tests.
+- `frontend/src/test/CoachVoicePreferences.test.tsx` (new): autoplay, per-language voice selection, and callback integration.
+- `frontend/src/test/VoiceRecordingStopsSpeech.test.tsx` (new): microphone priority.
 
-## Apply
-Extract this overlay at the root of `language-coach`. Keep `frontend/src/services/browserSpeech.ts` from Step 1 (already validated).
-
-## Validate
+## Run
 ```bash
 cd frontend
-npm test -- src/test/CoachAudioPlayback.test.tsx
+npm test -- src/test/speechPreferences.test.ts src/test/CoachVoicePreferences.test.tsx src/test/VoiceRecordingStopsSpeech.test.tsx src/test/CoachAudioPlayback.test.tsx
 npm test
 npm run build
 ```
-Baseline: 76 prior passing tests. Expected 83 tests / 11 test files if all seven pass.
 
-## Manual
-1. Open an active FR-CA session with existing coach messages. Verify no automatic speech.
-2. Select Listen for a response, Pause, Resume, Stop, Repeat; vary speed.
-3. Switch to another turn: only the selected turn should play.
-4. Leave & Resume Later; verify sound stops. Resume: old messages remain playable.
-5. Complete a session; sound stops once the panel unmounts after successful completion.
-6. Try an EN-CA profile; check voice choice and fallback messages.
-7. Try a browser without compatible voices; check clear explanatory message.
+Expected: 11 new tests (5 + 5 + 1). The last confirmed baseline was 76 tests; Step 2 added 7, so approximately **94 tests** total if your working tree matches the completed Step 2 and no other tests were added. Verify the actual count reported by Vitest.
 
-Note: Browsers may load speech voices asynchronously. If a voice is unavailable initially, try again after they have loaded. Regional voice fidelity depends on OS/browser installation. No TTS provider API cost; the browser may still use platform-provided network speech services.
+## Manual checks
+1. Start in FR-CA. Autoplay checkbox is OFF; load history and assert there is no spoken audio.
+2. Select a compatible French voice, set 0.75x speed, click Listen. Refresh; preferences persist.
+3. Enable autoplay. Submit a NEW text or transcribed voice message; only the new `coach_response` is spoken. Refresh/Resume should NOT speak history.
+4. Click Start recording while the coach is speaking; the audio must stop before microphone capture starts. Repeat with an old historical response.
+5. Speak, switch sessions, Leave & Resume Later, then Complete Session; speech stops in each case.
+6. Switch to English, choose an English voice. Switch back to French and confirm its selection is preserved.
+7. If no exact regional voice exists, select a displayed same-language fallback and confirm the UI indicates the selected voice locale during playback.
+8. Confirm text chat and STT transcript-to-coach still work with autoplay OFF. If a browser has no Web Speech API, voice settings and playback cannot produce sound but typing must still work.
+
+## Constraints / known limitations
+- Autoplay is OFF by default; no audio generated during mounting or history loading.
+- `localStorage` is per browser/device, not per application account. No database migration or server API changes.
+- Voice availability varies by browser, OS and installed voices. Web Speech API does not guarantee offline processing.
+- No OpenAI TTS calls are made; actual conversational LLM/STT API calls remain under existing application configuration.
+- Do not consider this increment validated until Vitest, Vite build and the manual browser checks succeed on your environment.

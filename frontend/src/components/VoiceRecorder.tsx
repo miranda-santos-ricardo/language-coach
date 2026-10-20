@@ -8,6 +8,7 @@ interface VoiceRecorderProps {
   profileId: string;
   practiceSessionId: string;
   onUseTranscript?: (text: string) => void;
+  onRecordingStart?: () => void;
 }
 
 type TranscriptionStatus =
@@ -21,6 +22,7 @@ export function VoiceRecorder({
   profileId,
   practiceSessionId,
   onUseTranscript,
+  onRecordingStart,
 }: VoiceRecorderProps) {
   const {
     status,
@@ -49,6 +51,11 @@ export function VoiceRecorder({
 
     return () => URL.revokeObjectURL(url);
   }, [recordedAudio]);
+
+  function beginRecording() {
+    onRecordingStart?.();
+    void startRecording();
+  }
 
   async function handleTranscribe() {
     if (!recordedAudio || transcriptionStatus === "UPLOADING") {
@@ -96,7 +103,7 @@ export function VoiceRecorder({
       {status === "IDLE" && (
         <div>
           <p>Record your voice to start practicing.</p>
-          <button type="button" onClick={() => void startRecording()}>
+          <button type="button" onClick={beginRecording}>
             Start recording
           </button>
         </div>

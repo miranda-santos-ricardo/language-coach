@@ -33,6 +33,7 @@ function emit(next: Partial<SpeechSnapshot>) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  window.localStorage.clear();
   snapshot = { status: "idle", turnId: null, requestedLocale: null, selectedLocale: null,
     voiceURI: null, voiceMatch: null, error: null };
   listeners = new Set();
@@ -61,7 +62,7 @@ describe("VOX-001 playback UI", () => {
     const user = userEvent.setup();
     render(<ConversationPanel {...ids} />);
     await screen.findByText("Bonjour!");
-    await user.selectOptions(controls("one").getByLabelText("Playback speed"), "0.75");
+    await user.selectOptions(screen.getByLabelText("Playback speed"), "0.75");
     await user.click(controls("one").getByRole("button", { name: "Listen" }));
     expect(speak).toHaveBeenCalledWith({ turnId: "one", text: "Bonjour!", locale: "fr-CA", rate: 0.75 });
     await user.click(controls("one").getByRole("button", { name: "Pause" }));
@@ -89,7 +90,8 @@ describe("VOX-001 playback UI", () => {
     result.rerender(<ConversationPanel {...ids} sessionId="new-session" speechLocale="en-CA" />);
     await waitFor(() => expect(stop.mock.calls.length).toBeGreaterThan(before));
     result.unmount();
-    expect(dispose).toHaveBeenCalledOnce();
+    // StrictMode-safe disposal is deferred to a microtask; wait for it.
+    await waitFor(() => expect(dispose).toHaveBeenCalledOnce());
   });
   it("does not expose playback if browser speech is unsupported", async () => {
     Object.defineProperty(engine, "available", { value: false, configurable: true });
