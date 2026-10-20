@@ -4,6 +4,8 @@ import { ApiError } from "../api/client";
 import { conversationsApi } from "../api/conversations";
 import type { ConversationContextIds, ConversationTurnDetail, TurnSubmitted } from "../api/conversations";
 import { LanguageFeedbackPanel } from "./LanguageFeedbackPanel";
+import { createBrowserSpeechEngine } from "../services/browserSpeech";
+import type { SpeechEngine, SpeechSnapshot } from "../services/browserSpeech";
 
 const PAGE_SIZE = 50;
 const MAX_TEXT = 4000;
@@ -34,10 +36,53 @@ function errorText(reason: unknown): string {
 
 interface ConversationPanelProps extends ConversationContextIds {
   voiceDraft?: { text: string; revision: number } | null;
+  speechLocale?: string;
 }
 
-export function ConversationPanel({ userId, profileId, sessionId, voiceDraft }: ConversationPanelProps) {
+function CoachAudioControls({ engine, snapshot, turnId, text, locale }: {
+  engine: SpeechEngine; snapshot: SpeechSnapshot; turnId: string; text: string; locale: string;
+}) {
+  const active = snapshot.turnId === turnId;
+  const speaking = active && snapshot.status === "speaking";
+  const paused = active && snapshot.status === "paused";
+  const [failure, setFailure] = useState<string | null>(null);
+  const [rate, setRate] = useState<0.75 | 1 | 1.25>(1);
+
+  function play() {
+    setFailure(null);
+    const result = engine.speak({ turnId, text, locale, rate });
+    if (!result.ok) setFailure(result.reason === "voice-unavailable"
+      ? `No compatible voice is installed for ${locale}.`
+      : result.reason === "unsupported" ? "Speech playback is not supported in this browser."
+      : "Unable to play coach audio.");
+  }
+
+  return <div className="coach-audio-controls" aria-label={`Audio controls for coach turn ${turnId}`}>
+    {!active && <button type="button" onClick={play} disabled={!engine.available}>Listen</button>}
+    {speaking && <button type="button" onClick={() => engine.pause()}>Pause</button>}
+    {paused && <button type="button" onClick={() => engine.resume()}>Resume</button>}
+    {(speaking || paused) && <button type="button" onClick={() => engine.stop()}>Stop</button>}
+    <button type="button" onClick={play} disabled={!engine.available}>Repeat</button>
+    <label>Playback speed <select value={rate} onChange={event => setRate(Number(event.target.value) as 0.75 | 1 | 1.25)}>
+      <option value={0.75}>0.75×</option><option value={1}>1×</option><option value={1.25}>1.25×</option>
+    </select></label>
+    {active && snapshot.voiceMatch === "language-fallback" && <span role="status">Using {snapshot.selectedLocale} voice instead of {locale}.</span>}
+    {active && snapshot.status === "error" && <span role="alert">{snapshot.error ?? "Speech playback failed"}</span>}
+    {failure && <span role="alert">{failure}</span>}
+    {!engine.available && <span>Audio unavailable in this browser.</span>}
+  </div>;
+}
+
+export function ConversationPanel({ userId, profileId, sessionId, voiceDraft, speechLocale = "en-CA" }: ConversationPanelProps) {
   const context = { userId, profileId, sessionId };
+  const speechRef = useRef<SpeechEngine | null>(null);
+  if (!speechRef.current) speechRef.current = createBrowserSpeechEngine();
+  const speech = speechRef.current;
+  const [speechSnapshot, setSpeechSnapshot] = useState<SpeechSnapshot>(() => speech.getSnapshot());
+  useEffect(() => {
+    const unsubscribe = speech.subscribe(setSpeechSnapshot);
+    return () => { unsubscribe(); speech.dispose(); };
+  }, [speech]);
   const [draft, setDraft] = useState("");
   const [modality, setModality] = useState<"text" | "voice">("text");
   const [history, setHistory] = useState<ConversationTurnDetail[]>([]);
@@ -82,6 +127,7 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft }: 
   }
 
   useEffect(() => {
+    speech.stop();
     // A prior session's pending responses cannot populate this session.
     activeIdentity.current = identity;
     historyLoading.current = false;
@@ -89,7 +135,7 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft }: 
     setDraft(""); setModality("text"); setLastResult(null); setSubmitError(null); pending.current = null;
     setHistory([]); setOffset(0); setHasMore(false); setHistoryBusy(false); setHistoryError(null);
     void loadHistory(0, true);
-    return () => { ++historyRequest.current; };
+    return () => { speech.stop(); ++historyRequest.current; };
   }, [identity]);
 
   // Moving a transcript into the editor is a separate, explicit user action.
@@ -138,12 +184,16 @@ export function ConversationPanel({ userId, profileId, sessionId, voiceDraft }: 
       {history.map(turn => <li key={turn.turn_id}>
         <p><strong>You:</strong> {turn.learner_text}</p>
         <p><strong>Coach:</strong> {turn.coach_response}</p>
+        <CoachAudioControls key={`${identity}:${turn.turn_id}`} engine={speech} snapshot={speechSnapshot} turnId={turn.turn_id}
+          text={turn.coach_response} locale={speechLocale} />
         <LanguageFeedbackPanel feedback={turn.feedback} />
       </li>)}
     </ol>
     {hasMore && <button type="button" disabled={historyBusy} onClick={() => void loadHistory(offset, false)}>Load more turns</button>}
     {lastResult && !history.some(turn => turn.turn_id === lastResult.turn_id) && <div aria-label="Latest coach response">
       <p><strong>Coach:</strong> {lastResult.coach_response}</p>
+      <CoachAudioControls key={`${identity}:${lastResult.turn_id}`} engine={speech} snapshot={speechSnapshot} turnId={lastResult.turn_id}
+        text={lastResult.coach_response} locale={speechLocale} />
       <LanguageFeedbackPanel feedback={lastResult.feedback} />
     </div>}
     <form onSubmit={event => void submit(event)}>

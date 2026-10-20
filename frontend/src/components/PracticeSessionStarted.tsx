@@ -131,7 +131,7 @@ export function PracticeSessionStarted({
         </div>
       )}
 
-      <ConversationPanel userId={userId} profileId={profile.id} sessionId={session.id} voiceDraft={voiceDraft?.sessionId === session.id ? voiceDraft : null} />
+      <ConversationPanel userId={userId} profileId={profile.id} sessionId={session.id} speechLocale={session.variant || profile.variant.code || session.language} voiceDraft={voiceDraft?.sessionId === session.id ? voiceDraft : null} />
 
       <VoiceRecorder
         userId={userId}
