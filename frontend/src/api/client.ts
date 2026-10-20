@@ -151,6 +151,18 @@ getPracticeSession: (
     `/users/${userId}/language-profiles/${profileId}/sessions/${sessionId}`,
   ),
 
+completePracticeSession: (
+  userId: string,
+  profileId: string,
+  sessionId: string,
+) =>
+  apiRequest<PracticeSession>(
+    `/users/${encodeURIComponent(userId)}` +
+      `/language-profiles/${encodeURIComponent(profileId)}` +
+      `/sessions/${encodeURIComponent(sessionId)}/complete`,
+    { method: "POST" },
+  ),
+
 
 transcribeAudio: (
   userId: string,

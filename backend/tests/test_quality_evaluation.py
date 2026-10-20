@@ -44,7 +44,7 @@ def test_mock_live_matches_contract_and_records_usage():
     assert p.calls == 1 and r["passed"] == 1
     assert r["cases"][0]["input_tokens"] == 110
     assert r["cases"][0]["human_review_required"] is True
-    assert r["cases"][0]["prompt_version"] == "coach-v2"
+    assert r["cases"][0]["prompt_version"] == "coach-v3"
 
 
 def test_mock_live_detects_wrong_status():

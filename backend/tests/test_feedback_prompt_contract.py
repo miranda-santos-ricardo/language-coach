@@ -40,7 +40,7 @@ def test_prompt_references_full_output_contract():
 
 
 def test_prompt_version_is_bumped():
-    assert PROMPT_VERSION == 'coach-v2'
+    assert PROMPT_VERSION == 'coach-v3'
 
 
 @pytest.mark.parametrize('variant', ['fr-CA', 'en-CA', 'en-US', 'en-GB'])

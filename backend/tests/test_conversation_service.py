@@ -52,7 +52,7 @@ def test_successful_orchestration_persists_atomic_turn_and_feedback(service_sess
     llm = FakeLLM()
     outcome = submit(ConversationService(llm=llm), db, user, profile, practice)
     assert outcome.turn_index == 1 and outcome.model == "fake-model"
-    assert outcome.prompt_version == "coach-v2" and not outcome.replayed
+    assert outcome.prompt_version == "coach-v3" and not outcome.replayed
     assert len(llm.calls) == 1
     instructions, messages = llm.calls[0]
     assert "fr-CA" in instructions and "Bonjour" == messages[-1].content

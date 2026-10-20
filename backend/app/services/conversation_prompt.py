@@ -7,7 +7,7 @@ from app.services.structured_feedback import CoachTurnOutput
 
 from app.services.conversation_context import ConversationContext
 
-PROMPT_VERSION = "coach-v2"
+PROMPT_VERSION = "coach-v3"
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,11 @@ class ConversationPromptBuilder:
             "Each dimension must contain status, a nonempty explanation, and suggestion (a string or null).",
             "An incorrect status requires a nonempty correction suggestion; do not invent errors or use incorrect for valid regional expressions.",
             "Reserve improvement_possible for optional improvements, including more professional alternatives to correct wording.",
-            "If the utterance is correct, keep improved_version equivalent to the original rather than inventing changes.",
+            "Assess grammatical correctness separately from register suitability: a grammatically correct informal sentence may still merit a professional reformulation.",
+            "If any feedback dimension recommends a concrete correction or context-appropriate improvement, improved_version must reflect the relevant recommendation(s) as one coherent sentence in the target language; do not repeat the unchanged learner utterance in that situation.",
+            "If no meaningful correction or improvement is needed for the selected training mode and register, preserve the original learner wording in improved_version rather than inventing changes.",
+            "Keep register.suggestion and improved_version semantically aligned; the full improved_version may differ in wording from an isolated suggestion, but must not contradict it.",
+            "Do not force formal expressions in informal/general practice: valid Québec French conversational phrasing may be perfectly appropriate without changes.",
             "Base feedback on the actual learner utterance, rather than examples or prior turns; avoid making up specific mistakes.",
             "Include at least one genuine strength and a useful next_recommendation. Keep coach_response conversational and concise.",
             "The JSON example below illustrates structure only; do not copy its content as learner feedback.",
@@ -72,8 +76,8 @@ class ConversationPromptBuilder:
             lines.append("Use short, direct sentences, familiar vocabulary, and brief concrete corrections.")
         elif context.current_cefr in {"C1", "C2"}:
             lines.append("Use nuanced vocabulary and precise, sophisticated reformulations without overcorrecting valid expressions.")
-        if context.communication_register in {"formal_executive", "professional"}:
-            lines.append("Match a respectful workplace tone, with precise terminology and audience-sensitive politeness.")
+        if context.communication_register in {"formal_executive", "professional", "formal"}:
+            lines.append("Match a respectful workplace tone, with precise terminology and audience-sensitive politeness. When a professional register improvement is suggested, reflect it in improved_version without changing the learner's intended meaning.")
         if context.training_mode == "professional":
             lines.append("Prioritize clarity, concision, politeness, executive presence, persuasion, and audience awareness for professional communication (e.g., banking, insurance, consulting, technology).")
         if context.language_variant.lower() == "fr-ca":

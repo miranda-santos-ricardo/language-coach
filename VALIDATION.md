@@ -1,58 +1,51 @@
-# Phase 5 — Step 11, Increment 1: End-to-End Integration & Regression Validation
+# Phase 6 — Step 1: Browser Speech Service (VOX-001)
 
-## Scope and guarantees
+## Scope
+- Adds only `frontend/src/services/browserSpeech.ts` and `frontend/src/test/browserSpeech.test.ts`.
+- No modification to React components, backend, database, API, dependencies or migrations.
+- No autoplay, HTTP requests or paid voice services.
+- Types: `CoachSpeechRequest`, `SpeechRate`, `SpeechSnapshot`, `SpeechResult`, `SpeechEngine`.
+- Public factory: `createBrowserSpeechEngine(dependencies?)`.
 
-- Six backend HTTP integration tests traverse the actual FastAPI routers, SQLAlchemy models/repositories, orchestration, and structured feedback, using an in-memory SQLite test database and **fake STT + fake LLM**. No paid inference or real microphone is used.
-- Existing frontend tests cover VoiceRecorder, explicit transcript transfer, conversation UI, resume, ordering/pagination, and stale-response isolation; run the whole suite.
-- This is **component-level/in-process E2E**, not a full physical-browser + live-PostgreSQL + OpenAI E2E. The manual checklist below covers those gaps.
-- No application code, migrations, or frontend code changed in this increment.
+## Apply
+Unzip into the **repository root**, preserving `frontend/src/...` paths. Do not replace existing files.
 
-## Install
-
-Extract the ZIP at the root of `language-coach`. The new Python test lives at `backend/tests/test_phase5_e2e_flow.py`. Do not copy `STEP11_VALIDATION.md` under `backend`.
-
-## Automated, offline (zero OpenAI calls)
-
-```powershell
-cd backend
-python -m pytest -q tests/test_phase5_e2e_flow.py
-python -m pytest -q
-alembic current
-cd ../frontend
+## Run (from repository root)
+```sh
+cd frontend
+npm test -- src/test/browserSpeech.test.ts
 npm test
 npm run build
 ```
 
-Expected baseline plus new tests: backend 302 tests (296 + 6), frontend 55 tests, Alembic `c5202601 (head)`, TypeScript/Vite build successful. The total may vary if local files have changed.
+Expected: 14 new unit tests and the previously reported 62 tests (approximately 76 total), assuming the existing baseline and tests have not changed. Verify exact count from Vitest; no backend test count changes.
 
-## Manual E2E scenarios (mark evidence and actual results)
+## API usage for Step 2 (not wired yet)
+```ts
+import { createBrowserSpeechEngine } from "./services/browserSpeech";
+const engine = createBrowserSpeechEngine();
+const unsubscribe = engine.subscribe((snapshot) => {
+  // snapshot.status: idle | speaking | paused | unavailable | error
+  // snapshot.voiceMatch: exact | language-fallback | null
+});
+engine.speak({ turnId: "<actual-turn-id>", text: "Bonjour !", locale: "fr-CA", rate: 1 });
+engine.pause();
+engine.resume();
+engine.stop();
+unsubscribe();
+engine.dispose();
+```
 
-| ID | Scenario | Procedure | Expected result | Result / evidence |
-|---|---|---|---|---|
-| M01 | French voice path | Start active fr-CA profile; record voice; transcribe; **do not** transfer yet | Transcript visible, no coach request and no new conversation turn | |
-| M02 | Explicit transfer and edit | Click *Use transcript in coach*; edit text | Draft changes to voice mode, no POST until *Send to Coach* | |
-| M03 | AI reply and feedback | Click *Send to Coach* (see paid-call note below) | Coach response and structured feedback rendered and retrievable after refresh | |
-| M04 | English text and multi-turn | Switch to en-CA profile; submit 2 text messages | Target-language reply, ordered turn indexes, correct history context | |
-| M05 | Resume | Leave active session; reselect profile; *Find active sessions*, resume | Same PracticeSession and saved turns recovered | |
-| M06 | Error recovery | Stop backend temporarily or simulate an HTTP failure before submission | Draft retained; retries avoid duplicate turn; no secret leakage | |
-| M07 | Separation | Switch profile/session while history fetch pending | No old-session messages appear in new session | |
-| M08 | Session lifecycle | Finish session; revisit history; try to submit another turn | Existing history readable; new POST rejected | |
-| M09 | Invalid input/audio | Empty text, invalid audio, oversized audio | Controlled 4xx, no completed turn from invalid input | |
-| M10 | Concurrent POST | With test PostgreSQL environment and two independent connections, send simultaneous turns to the same session | One active operation at a time; second receives documented conflict; no duplicate indexes | |
-| M11 | Regional/professional quality | Evaluate fr-CA B2 + en-CA professional scenario manually | Record *subjective* usefulness, false-positive corrections, register and CEFR; do not infer quality from fixture pass | |
-| M12 | Local mobile mic | Use HTTPS secure context via local tunnel or trusted local certificate (do not expose unauthenticated service publicly) | Microphone permission works on phone; transcript reaches editor only after explicit action | |
+### Decisions
+- Voice selection: exact requested BCP-47 locale; otherwise same-language voice; do not silently select a different language. Regional fallback is surfaced in `SpeechResult.voiceMatch` and `SpeechSnapshot.voiceMatch`.
+- `preferredVoiceURI` is honored only inside the best available locale tier.
+- If no compatible voice is available, `speak` returns `voice-unavailable`; UI should allow retry after `voiceschanged`.
+- Browser TTS may rely on cloud-backed voices from the browser/OS; this code performs no explicit network calls.
+- Voice catalog refresh sends a snapshot notification to subscribers; Step 2 should query `getVoices()` again if needed.
+- One engine per active session; call `stop` at session switch/recording start and `dispose` on unmount.
+- User gesture may be needed to start speech on mobile.
+- No integration with `ConversationPanel`, `PracticeSessionStarted` or `VoiceRecorder` yet; that belongs to Step 2.
 
-### Paid-call boundary
-
-M03/M04/M11 with actual OpenAI inference or real STT **may consume credits**. Do **not** run those against the paid provider without explicit authorization. You can defer these and record `NOT RUN — paid calls not authorized`, or use configured local/fake providers. No paid calls are made by the automated tests included here. If you authorize live tests later, record the exact number of calls, model, date and approximate cost.
-
-### Database and security limitations
-
-- Automated suite uses SQLite; PostgreSQL migration, `pg_try_advisory_xact_lock` multi-connection contention, server restart and TLS are **not proven** by this test.
-- User IDs in URLs are not authentication; application must not be exposed publicly before real authenticated identity enforcement.
-- For mobile microphone on a LAN, browsers commonly require a secure context (HTTPS or localhost).
-- Do not downgrade live databases as part of manual validation.
-
-## Definition-of-Done evidence for Step 11 Increment 1
-
-Record backend and frontend test counts, Vite build, migration head, each manual scenario result and failures. Step 11 closes only after the later closure report separates verified behavior from deferred production/security/linguistic checks.
+## Validation performed in this workspace
+- TypeScript strict compilation of the new service alone passed with `tsc --noEmit --strict --target ES2022 --module ESNext --lib ES2022,DOM`.
+- Full `npm test` and `npm run build` remain to be validated in the user's installed frontend environment.

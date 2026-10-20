@@ -35,7 +35,7 @@ def test_post_success_persists_feedback_and_replay(api_client, service_session):
         assert first.status_code == 201, first.text
         data = first.json()
         assert data["turn_index"] == 1 and data["feedback"]["grammar"]["status"] == "correct"
-        assert data["prompt_version"] == "coach-v2" and data["replayed"] is False
+        assert data["prompt_version"] == "coach-v3" and data["replayed"] is False
         second = api_client.post(url(u,p,s), json=body)
         assert second.status_code == 201 and second.json()["turn_id"] == data["turn_id"]
         assert second.json()["replayed"] is True and len(provider.calls) == 1
