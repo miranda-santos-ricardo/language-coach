@@ -326,7 +326,7 @@ def transcribe_practice_session_audio(
     
     except TranscriptionContextError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Practice session has an invalid transcription context.",
         ) from exc
 
