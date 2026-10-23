@@ -1,12 +1,15 @@
 """Phase 7 Step 2: local, non-production acoustic-activity feasibility probe.
 
 NOT speech VAD, pronunciation scoring, or an indication of speaking proficiency.
-No upload, database, external API, raw audio persistence, or network access.
+No upload, database, external API, network access, or retained raw audio.
+Seek-dependent media may require a private, immediately deleted temporary input file.
 Requires a locally installed ffmpeg binary; no new Python dependencies.
 """
 from __future__ import annotations
 
 import math
+import os
+import tempfile
 import shutil
 import struct
 import subprocess
@@ -46,27 +49,60 @@ class AcousticProbeResult:
 
 
 def _decode_pcm(audio: bytes, *, ffmpeg_binary: str, timeout_seconds: int) -> bytes:
+    """Decode safely, retrying seek-dependent containers via a private temporary file.
+
+    First attempt remains pipe-only. Some MP4/3GP files require seeking to read
+    the moov atom, which stdin cannot support. No audio is retained intentionally.
+    """
     if not audio or len(audio) > MAX_INPUT_BYTES:
         raise AudioAnalysisError('Audio must be nonempty and at most 10 MiB')
+    if timeout_seconds <= 0:
+        raise AudioAnalysisError('Invalid decoder timeout')
     binary = shutil.which(ffmpeg_binary)
     if binary is None:
         raise AudioAnalysisError('Local ffmpeg binary unavailable')
-    # No shell, no filenames, no user-controlled flags, no disk writes.
-    command = [binary, '-nostdin', '-hide_banner', '-loglevel', 'error', '-i', 'pipe:0',
-               '-map', '0:a:0', '-vn', '-ac', '1', '-ar', str(SAMPLE_RATE),
-               '-t', str(MAX_DURATION_SECONDS + 1), '-f', 's16le', 'pipe:1']
-    try:
-        proc = subprocess.run(command, input=audio, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE, timeout=timeout_seconds, check=False)
-    except subprocess.TimeoutExpired as exc:
-        raise AudioAnalysisError('Audio decoder timeout') from exc
-    except OSError as exc:
-        raise AudioAnalysisError('Audio decoder unavailable') from exc
-    if proc.returncode != 0 or not proc.stdout or len(proc.stdout) % 2:
+
+    def command(source: str) -> list[str]:
+        return [binary, '-nostdin', '-hide_banner', '-loglevel', 'error',
+                '-i', source, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', str(SAMPLE_RATE),
+                '-t', str(MAX_DURATION_SECONDS + 1), '-f', 's16le', 'pipe:1']
+
+    def run(cmd: list[str], payload: bytes | None = None) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(cmd, input=payload, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, timeout=timeout_seconds, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise AudioAnalysisError('Audio decoder timeout') from exc
+        except OSError as exc:
+            raise AudioAnalysisError('Audio decoder unavailable') from exc
+
+    def valid(proc: subprocess.CompletedProcess) -> bool:
+        return proc.returncode == 0 and bool(proc.stdout) and len(proc.stdout) % 2 == 0
+
+    decoded = run(command('pipe:0'), audio)
+    if not valid(decoded):
+        # mkstemp creates a private file (0600 on POSIX). Close the descriptor
+        # before spawning FFmpeg, required for Windows file sharing semantics.
+        path = None
+        try:
+            fd, path = tempfile.mkstemp(prefix='language_coach_audio_', suffix='.bin')
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(audio)
+            decoded = run(command(path))
+        except OSError as exc:
+            raise AudioAnalysisError('Temporary audio decoding unavailable') from exc
+        finally:
+            if path is not None:
+                try:
+                    os.unlink(path)
+                except OSError as exc:
+                    # Never silently leave a private audio artifact behind.
+                    raise AudioAnalysisError('Temporary audio cleanup failed') from exc
+    if not valid(decoded):
         raise AudioAnalysisError('Audio could not be decoded as mono PCM')
-    if len(proc.stdout) > MAX_DURATION_SECONDS * SAMPLE_RATE * 2:
+    if len(decoded.stdout) > MAX_DURATION_SECONDS * SAMPLE_RATE * 2:
         raise AudioAnalysisError('Decoded audio exceeds 60 seconds')
-    return proc.stdout
+    return decoded.stdout
 
 
 def _intervals(flags: list[bool], frame_samples: int, total_samples: int) -> list[Interval]:
