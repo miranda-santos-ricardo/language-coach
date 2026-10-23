@@ -5,7 +5,7 @@ from app.services.conversational_evidence import ConversationalEvidence, Convers
 from app.services.controlled_conversational_evaluator import prepare_evaluation_request
 from app.services.sqlalchemy_turn_resolver import make_sqlalchemy_turn_resolver
 from app.services.conversation_turn_assessment import TurnAssessmentError
-from tests.test_sqlalchemy_turn_resolver import store, resolver, Turn
+from tests.support.sqlalchemy_resolver_fixtures import store, resolver, Turn
 
 
 def evidence(origin='VOICE_TEXT_UNKNOWN', original=False, text='Je recommande une approche progressive et mesurée.'):
