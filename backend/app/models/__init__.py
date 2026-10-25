@@ -7,6 +7,7 @@ from app.models.language_profile import LanguageProfile
 from app.models.language_variant import LanguageVariant
 from app.models.practice_session import PracticeSession
 from app.models.user import User
+from app.models.oidc_identity_link import OIDCIdentityLink
 
 __all__ = [
     "CEFRLevel",
@@ -20,4 +21,5 @@ __all__ = [
     "SessionStatus",
     "TrainingMode",
     "User",
+    "OIDCIdentityLink",
 ]
