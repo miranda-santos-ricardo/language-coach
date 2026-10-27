@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Callable, Mapping
 from uuid import UUID
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.learner_pilot_app import create_learner_pilot_app
@@ -17,6 +17,9 @@ from app.db.session import get_db
 from app.services.assessment_oidc_verifier import OIDCVerifierConfig
 from app.services.learner_external_identity import ExternalOIDCLearnerVerifier
 from app.services.learner_pilot_routes import oidc_learner_adapter
+from app.services.learner_identity import make_learner_identity_dependency
+from app.models.user import User
+from app.schemas.user import UserRead
 
 
 def create_external_oidc_learner_pilot_app(
@@ -56,4 +59,16 @@ def create_external_oidc_learner_pilot_app(
             yield session
 
     pilot_app.dependency_overrides[get_db] = pilot_db
+
+    # A server-derived identity endpoint: no user_id is accepted from a client.
+    # Only the isolated app exposes this path; the legacy app remains unchanged.
+    resolve_user = make_learner_identity_dependency(oidc_learner_adapter(verifier))
+
+    @pilot_app.get("/pilot/me", response_model=UserRead, tags=["pilot"])
+    def pilot_me(user_id: UUID = Depends(resolve_user), db: Session = Depends(get_db)):
+        user = db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        return user
+
     return pilot_app

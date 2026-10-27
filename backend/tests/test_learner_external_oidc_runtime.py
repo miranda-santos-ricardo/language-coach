@@ -150,3 +150,18 @@ def test_pilot_routes_use_same_database_factory_as_oidc(context):
     response = client.get(f"/users/{owner}", headers=_headers(sign()))
     assert response.status_code == 200
     assert response.json()["id"] == str(owner)
+
+
+def test_pilot_me_uses_server_derived_identity(context):
+    engine, owner, other, app, sign, _, _ = context
+    _link(engine, owner)
+    client = TestClient(app())
+    assert client.get('/pilot/me').status_code == 401
+    response = client.get('/pilot/me', headers=_headers(sign()))
+    assert response.status_code == 200
+    assert response.json()['id'] == str(owner)
+    assert response.json()['id'] != str(other)
+    with Session(engine) as db:
+        assert revoke_link(db, issuer=ISSUER, subject=SUBJECT)
+        db.commit()
+    assert client.get('/pilot/me', headers=_headers(sign())).status_code == 401
